@@ -5,7 +5,7 @@ SRCS     := src/main.cpp src/Vfs.cpp src/JsonIO.cpp
 OBJS     := $(SRCS:.cpp=.o)
 BIN      := lab2_vfs_bstar
 
-.PHONY: all clean run
+.PHONY: all clean run distclean
 
 all: $(BIN)
 
@@ -19,4 +19,4 @@ run: $(BIN)
 	./$(BIN)
 
 clean:
-	rm -f $(OBJS) $(BIN)
+	rm -f $(OBJS) $(BIN) ./*.json

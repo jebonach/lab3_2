@@ -1,0 +1,47 @@
+#include "JsonIO.hpp"
+#include <fstream>
+#include <sstream>
+
+namespace {
+std::string esc(const std::string& s) {
+    std::string o; o.reserve(s.size()+8);
+    for (char c: s) {
+        if (c=='"') o += "\\\"";
+        else if (c=='\\') o += "\\\\";
+        else if (c=='\n') o += "\\n";
+        else o += c;
+    }
+    return o;
+}
+
+void toJsonRec(const std::shared_ptr<FSNode>& n, std::ostringstream& out, int indent) {
+    auto ind = std::string(indent, ' ');
+    out << ind << "{\n";
+    out << ind << "  \"name\": \"" << esc(n->name) << "\",\n";
+    out << ind << "  \"type\": \"" << (n->isFile? "file":"folder") << "\"";
+    if (!n->isFile && !n->children.empty()) {
+        out << ",\n" << ind << "  \"children\": [\n";
+        bool first = true;
+        for (auto it = n->children.begin(); it!=n->children.end(); ++it) {
+            if (!first) out << ",\n";
+            first = false;
+            toJsonRec(it->second, out, indent+4);
+        }
+        out << "\n" << ind << "  ]\n" << ind << "}";
+    } else {
+        out << "\n" << ind << "}";
+    }
+}
+} // anon
+
+namespace JsonIO {
+bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
+                        const std::string& path) {
+    std::ofstream f(path);
+    if (!f) return false;
+    std::ostringstream out;
+    toJsonRec(root, out, 0);
+    f << out.str() << "\n";
+    return true;
+}
+} // namespace JsonIO
