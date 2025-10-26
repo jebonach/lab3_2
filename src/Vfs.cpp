@@ -1,8 +1,8 @@
 #include "Vfs.hpp"
 #include "Path.hpp"
 #include "JsonIO.hpp"
-#include "Error.hpp"
 #include <iostream>
+#include <vector>
 
 Vfs::Vfs() : fileIndex_(7) {
     root_ = std::make_shared<FSNode>("/", false);
@@ -45,34 +45,34 @@ std::shared_ptr<FSNode> Vfs::resolveParent(const std::string& path, std::string&
 
 void Vfs::cd(const std::string& path) {
     auto dest = resolve(path);
-    if (!dest)          throw NotFound("cd: path not found");
-    if (dest->isFile)   throw NotDirectory("cd: not a directory");
+    if (!dest)          throw VfsException(ErrorType::PathError, 0);    // Path not found
+    if (dest->isFile)   throw VfsException(ErrorType::InvalidArg, 1);   // Not a directory
     cwd_ = dest;
 }
 
 void Vfs::mkdir(const std::string& path) {
-    if (path.empty()) throw InvalidName("mkdir: empty name");
+    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);     // Invalid name
     std::string name;
     auto parent = resolveParent(path, name);
-    if (!parent)             throw NotFound("mkdir: parent not found");
-    if (parent->isFile)      throw NotDirectory("mkdir: parent is file");
+    if (!parent)             throw VfsException(ErrorType::PathError, 0);
+    if (parent->isFile)      throw VfsException(ErrorType::InvalidArg, 1);
     if (name.empty() || name=="." || name==".." || name.find('/')!=std::string::npos)
-        throw InvalidName("mkdir: invalid name");
-    if (parent->children.count(name)) throw AlreadyExists("mkdir: already exists");
+        throw VfsException(ErrorType::InvalidArg, 3);
+    if (parent->children.count(name)) throw VfsException(ErrorType::InvalidArg, 2);
     auto dir = std::make_shared<FSNode>(name, false);
     dir->parent = parent;
     parent->children.emplace(name, dir);
 }
 
 void Vfs::createFile(const std::string& path) {
-    if (path.empty()) throw InvalidName("create: empty name");
+    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);
     std::string name;
     auto parent = resolveParent(path, name);
-    if (!parent)        throw NotFound("create: parent not found");
-    if (parent->isFile) throw NotDirectory("create: parent is file");
+    if (!parent)        throw VfsException(ErrorType::PathError, 0);
+    if (parent->isFile) throw VfsException(ErrorType::InvalidArg, 1);
     if (name.empty() || name=="." || name==".." || name.find('/')!=std::string::npos)
-        throw InvalidName("create: invalid name");
-    if (parent->children.count(name)) throw AlreadyExists("create: already exists");
+        throw VfsException(ErrorType::InvalidArg, 3);
+    if (parent->children.count(name)) throw VfsException(ErrorType::InvalidArg, 2);
     auto f = std::make_shared<FSNode>(name, true);
     f->parent = parent;
     parent->children.emplace(name, f);
@@ -81,14 +81,14 @@ void Vfs::createFile(const std::string& path) {
 
 void Vfs::renameNode(const std::string& path, const std::string& newName) {
     if (newName.empty() || newName=="." || newName==".." || newName.find('/')!=std::string::npos)
-        throw InvalidName("rename: invalid new name");
+        throw VfsException(ErrorType::InvalidArg, 3);
 
     auto n = resolve(path);
-    if (!n)            throw NotFound("rename: path not found");
-    if (n==root_)      throw RootOperation("rename: cannot rename root");
+    if (!n)            throw VfsException(ErrorType::PathError, 0);
+    if (n==root_)      throw VfsException(ErrorType::RootError, 4);
     auto p = n->parent.lock();
-    if (!p)            throw PathError("rename: parent missing");
-    if (p->children.count(newName)) throw AlreadyExists("rename: target exists");
+    if (!p)            throw VfsException(ErrorType::PathError, 7);
+    if (p->children.count(newName)) throw VfsException(ErrorType::InvalidArg, 2);
 
     if (n->isFile) indexEraseIfFile(n);
     p->children.erase(n->name);
@@ -99,18 +99,18 @@ void Vfs::renameNode(const std::string& path, const std::string& newName) {
 
 void Vfs::mv(const std::string& src, const std::string& dstDir) {
     auto node = resolve(src);
-    if (!node) throw NotFound("mv: source not found");
-    if (node==root_) throw RootOperation("mv: cannot move root");
+    if (!node) throw VfsException(ErrorType::PathError, 0);
+    if (node==root_) throw VfsException(ErrorType::RootError, 4);
 
     auto dst = resolve(dstDir);
-    if (!dst)         throw NotFound("mv: destination not found");
-    if (dst->isFile)  throw NotDirectory("mv: destination is file");
+    if (!dst)         throw VfsException(ErrorType::PathError, 8);  // dest not found
+    if (dst->isFile)  throw VfsException(ErrorType::InvalidArg, 9); // dest not dir
     if (!node->isFile && isSubtreeOf(dst, node))
-        throw Conflict("mv: cannot move directory into its subtree");
+        throw VfsException(ErrorType::Conflict, 5);
 
     auto p = node->parent.lock();
-    if (!p) throw PathError("mv: parent missing");
-    if (dst->children.count(node->name)) throw AlreadyExists("mv: name conflict in destination");
+    if (!p) throw VfsException(ErrorType::PathError, 7);
+    if (dst->children.count(node->name)) throw VfsException(ErrorType::InvalidArg, 2);
 
     p->children.erase(node->name);
     node->parent = dst;
@@ -119,10 +119,10 @@ void Vfs::mv(const std::string& src, const std::string& dstDir) {
 
 void Vfs::rm(const std::string& path) {
     auto node = resolve(path);
-    if (!node)   throw NotFound("rm: path not found");
-    if (node==root_) throw RootOperation("rm: cannot remove root");
+    if (!node)   throw VfsException(ErrorType::PathError, 0);
+    if (node==root_) throw VfsException(ErrorType::RootError, 4);
     auto p = node->parent.lock();
-    if (!p) throw PathError("rm: parent missing");
+    if (!p) throw VfsException(ErrorType::PathError, 7);
 
     indexEraseSubtree(node);
     p->children.erase(node->name);
@@ -130,10 +130,10 @@ void Vfs::rm(const std::string& path) {
 
 void Vfs::ls(const std::string& path) const {
     auto n = path.empty() ? cwd_ : resolve(path);
-    if (!n)         throw NotFound("ls: path not found");
-    if (n->isFile)  throw NotDirectory("ls: not a directory");
+    if (!n)         throw VfsException(ErrorType::PathError, 0);
+    if (n->isFile)  throw VfsException(ErrorType::InvalidArg, 1);
     for (auto& [name, child] : n->children) {
-        std::cout << (child->isFile? "  📄 ":"  📁 ") << name << (child->isFile? "":"\/") << "\n";
+        std::cout << (child->isFile? "  📄 ":"  📁 ") << name << (child->isFile? "" : "/") << "\n";
     }
 }
 
@@ -148,7 +148,7 @@ std::shared_ptr<FSNode> Vfs::findFileByName(const std::string& name) const {
 
 void Vfs::saveJson(const std::string& jsonPath) const {
     if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
-        throw SaveError("save: cannot write json");
+        throw VfsException(ErrorType::IOError, 6);
 }
 
 // ===== helpers =====
@@ -169,7 +169,7 @@ std::string Vfs::fullPathOf(const std::shared_ptr<FSNode>& n) {
 
 void Vfs::printTreeRec(const std::shared_ptr<FSNode>& n, int depth) {
     for (int i=0;i<depth;++i) std::cout << "  ";
-    std::cout << (n->isFile? "📄 ":"📁 ") << n->name << (n->isFile? "":"\/") << "\n";
+    std::cout << (n->isFile? "📄 " : "📁 ") << n->name << (n->isFile? "" : "/") << "\n";
     if (!n->isFile) for (auto& [_, ch] : n->children) printTreeRec(ch, depth+1);
 }
 
@@ -182,9 +182,11 @@ bool Vfs::isSubtreeOf(const std::shared_ptr<FSNode>& a, const std::shared_ptr<FS
 void Vfs::indexInsertIfFile(const std::shared_ptr<FSNode>& n) {
     if (n->isFile) fileIndex_.insert(n->name, std::weak_ptr<FSNode>(n));
 }
+
 void Vfs::indexEraseIfFile(const std::shared_ptr<FSNode>& n) {
     if (n->isFile) fileIndex_.erase(n->name);
 }
+
 void Vfs::indexEraseSubtree(const std::shared_ptr<FSNode>& n) {
     if (n->isFile) indexEraseIfFile(n);
     else for (auto& [_, ch] : n->children) indexEraseSubtree(ch);

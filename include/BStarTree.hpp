@@ -21,7 +21,7 @@ public:
                 if (it != n->keys.end() && *it == key) return n->values[idx];
                 return std::nullopt;
             } else {
-                if (it != n->keys.end() && *it == key) ++idx;
+                if (it != n->keys.end() && *it == key) ++idx; // вправо при равенстве
                 n = n->children[idx];
             }
         }
@@ -40,6 +40,7 @@ public:
 
     bool erase(const K& key) {
         bool ok = eraseImpl(root_, key, nullptr, 0);
+        // схлопывание корня, если внутренний и опустел
         if (!root_->leaf && root_->keys.empty() && !root_->children.empty()) {
             root_ = root_->children[0];
         }
@@ -50,8 +51,8 @@ private:
     struct Node {
         bool leaf;
         std::vector<K> keys;
-        std::vector<V> values;
-        std::vector<std::shared_ptr<Node>> children;
+        std::vector<V> values; // только для листа
+        std::vector<std::shared_ptr<Node>> children; // только для внутреннего
         explicit Node(bool isLeaf) : leaf(isLeaf) {}
     };
 
@@ -74,7 +75,7 @@ private:
         if (it != n->keys.end() && *it == key) ++ci;
         if (n->children[ci]->keys.size() >= M_) {
             splitOrRedistributeChild(n, ci);
-
+            // пересчитать позицию после модификации
             it = std::lower_bound(n->keys.begin(), n->keys.end(), key);
             ci = size_t(it - n->keys.begin());
             if (it != n->keys.end() && *it == key) ++ci;
@@ -85,12 +86,13 @@ private:
     void splitOrRedistributeChild(const std::shared_ptr<Node>& parent, size_t idx) {
         auto child = parent->children[idx];
 
+        // Для внутренних узлов — только обычный split (безопасно)
         if (!child->leaf) {
             splitChild(parent, idx);
             return;
         }
 
-        // лев
+        // 1) Перераспределить с правым
         if (idx + 1 < parent->children.size()) {
             auto right = parent->children[idx + 1];
             if (child->keys.size() >= M_ && right->keys.size() < M_) {
@@ -98,7 +100,7 @@ private:
                 return;
             }
         }
-        // прав
+        // 2) Перераспределить с левым
         if (idx > 0) {
             auto left = parent->children[idx - 1];
             if (child->keys.size() >= M_ && left->keys.size() < M_) {
@@ -106,7 +108,7 @@ private:
                 return;
             }
         }
-        // 3 split
+        // 3) Два полных соседа? triple split (только листья)
         if (idx + 1 < parent->children.size() && parent->children[idx + 1]->keys.size() >= M_) {
             tripleSplit(parent, idx, idx + 1);
             return;
@@ -115,7 +117,7 @@ private:
             tripleSplit(parent, idx - 1, idx);
             return;
         }
-        // split
+        // 4) Фоллбек: обычный split
         splitChild(parent, idx);
     }
 
@@ -125,12 +127,14 @@ private:
         size_t mid = y->keys.size() / 2;
 
         if (y->leaf) {
+            // B+-стиль: разделитель = первый ключ правого
             z->keys.assign(y->keys.begin() + mid, y->keys.end());
             z->values.assign(y->values.begin() + mid, y->values.end());
             y->keys.resize(mid);
             y->values.resize(mid);
             parent->keys.insert(parent->keys.begin() + idx, z->keys.front());
         } else {
+            // классический split для внутренних
             auto upKey = y->keys[mid];
             z->keys.assign(y->keys.begin() + mid + 1, y->keys.end());
             y->keys.resize(mid);
@@ -145,6 +149,7 @@ private:
                              const std::shared_ptr<Node>& right,
                              const std::shared_ptr<Node>& parent,
                              size_t parentKeyIdx) {
+        // Только для листьев
         if (!(left->leaf && right->leaf)) return;
 
         const size_t total = left->keys.size() + right->keys.size();
@@ -168,6 +173,7 @@ private:
             right->values.erase(right->values.begin(), right->values.begin() + move);
         }
 
+        // обновить разделитель = первый ключ правого
         parent->keys[parentKeyIdx] = right->keys.front();
     }
 
@@ -206,6 +212,7 @@ private:
         parent->children.insert(parent->children.begin() + iRight + 1, C);
     }
 
+    // --- УДАЛЕНИЕ: листовая балансировка ---
     bool eraseImpl(const std::shared_ptr<Node>& n, const K& key,
                    const std::shared_ptr<Node>& parent, size_t parentChildIdx) {
         auto it = std::lower_bound(n->keys.begin(), n->keys.end(), key);
@@ -229,7 +236,7 @@ private:
             }
             return false;
         } else {
-            if (it != n->keys.end() && *it == key) ++idx;
+            if (it != n->keys.end() && *it == key) ++idx; // вправо при равенстве
             bool res = eraseImpl(n->children[idx], key, n, idx);
 
             if (res && n->children[idx]->leaf && idx > 0 && !n->children[idx]->keys.empty()) {
@@ -244,6 +251,7 @@ private:
         if (!child->leaf) return;
 
         const size_t need = minFill(M_);
+
         // 1) Заём у левого
         if (idx > 0) {
             auto left = parent->children[idx - 1];
@@ -268,7 +276,7 @@ private:
                 return;
             }
         }
-        // merge
+        // 3) Слияние
         if (idx > 0) {
             auto left = parent->children[idx - 1];
             left->keys.insert(left->keys.end(), child->keys.begin(), child->keys.end());

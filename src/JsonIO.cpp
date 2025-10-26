@@ -32,7 +32,7 @@ void toJsonRec(const std::shared_ptr<FSNode>& n, std::ostringstream& out, int in
         out << "\n" << ind << "}";
     }
 }
-} // anon
+}
 
 namespace JsonIO {
 bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
@@ -44,4 +44,4 @@ bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
     f << out.str() << "\n";
     return true;
 }
-} // namespace JsonIO
+}

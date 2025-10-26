@@ -1,50 +1,54 @@
 #pragma once
+
 #include "FSNode.hpp"
 #include "BStarTree.hpp"
-#include <string>
+#include "Errors.hpp"
+
 #include <memory>
+#include <string>
 
 class Vfs {
 public:
     Vfs();
 
-    // навигация / информация
-    std::string pwd() const noexcept;
-    void cd(const std::string& path);                 // throws
+    [[nodiscard]] std::string pwd() const noexcept;
+    void cd(const std::string& path);
 
-    // модификации
-    void mkdir(const std::string& path);              // throws
-    void createFile(const std::string& path);         // throws
-    void rm(const std::string& path);                 // throws
-    void renameNode(const std::string& path, const std::string& newName); // throws
-    void mv(const std::string& src, const std::string& dstDir);           // throws
+    void mkdir(const std::string& path);
+    void createFile(const std::string& path);
+    void rm(const std::string& path);
+    void renameNode(const std::string& path,
+                    const std::string& newName);
+    void mv(const std::string& src, const std::string& dstDir);
 
-    // вывод
-    void ls(const std::string& path = "") const;      // throws (если путь некорректен)
+
+    void ls(const std::string& path = "") const;
     void printTree() const;
 
-    // индекс поиска
-    std::shared_ptr<FSNode> findFileByName(const std::string& name) const; // nullptr если нет
+    [[nodiscard]] std::shared_ptr<FSNode>
+    findFileByName(const std::string& name) const;
 
-    // сериализация
-    void saveJson(const std::string& jsonPath) const; // throws
-
+    void saveJson(const std::string& jsonPath) const;
+    
 private:
-    std::shared_ptr<FSNode> root_;
-    std::shared_ptr<FSNode> cwd_;
+    using NodePtr  = std::shared_ptr<FSNode>;
+    using WNodePtr = std::weak_ptr<FSNode>;
 
-    // имя файла -> узел (храним weak_ptr)
-    BStarTree<std::string, std::weak_ptr<FSNode>> fileIndex_;
+    NodePtr root_;
+    NodePtr cwd_;
 
-    // вспомогательные
-    std::shared_ptr<FSNode> resolve(const std::string& path) const; // nullptr если нет
-    std::shared_ptr<FSNode> resolveParent(const std::string& path, std::string& leafName) const;
+    
+    BStarTree<std::string, WNodePtr> fileIndex_;
 
-    static std::string fullPathOf(const std::shared_ptr<FSNode>& n);
-    static void printTreeRec(const std::shared_ptr<FSNode>& n, int depth);
-    static bool isSubtreeOf(const std::shared_ptr<FSNode>& a, const std::shared_ptr<FSNode>& b);
+    [[nodiscard]] NodePtr resolve(const std::string& path) const;
+    [[nodiscard]] NodePtr resolveParent(const std::string& path,
+                                        std::string& leafName) const;
 
-    void indexInsertIfFile(const std::shared_ptr<FSNode>& n);
-    void indexEraseIfFile(const std::shared_ptr<FSNode>& n);
-    void indexEraseSubtree(const std::shared_ptr<FSNode>& n);
+    static std::string fullPathOf(const NodePtr& n);
+    static void        printTreeRec(const NodePtr& n, int depth);
+    static bool        isSubtreeOf(const NodePtr& a, const NodePtr& b);
+
+    void indexInsertIfFile(const NodePtr& n);
+    void indexEraseIfFile(const NodePtr& n);
+    void indexEraseSubtree(const NodePtr& n);
 };
