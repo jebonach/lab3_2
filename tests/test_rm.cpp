@@ -4,13 +4,12 @@
 #include <iostream>
 
 int main() {
-    // rm файла и каталога
     {
         Vfs v;
         v.mkdir("/a");
         v.createFile("/a/f");
         v.rm("/a/f");
-        // повторно удалить файл — not found
+
         try { v.rm("/a/f"); assert(!"must throw"); }
         catch (const VfsException& ex) {
             assert(ex.type()==ErrorType::PathError && ex.code()==0);
@@ -23,7 +22,7 @@ int main() {
             assert(ex.type()==ErrorType::PathError && ex.code()==0);
         }
     }
-    // попытка удалить корень
+
     {
         Vfs v;
         try { v.rm("/"); assert(!"must throw"); }

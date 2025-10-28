@@ -45,13 +45,13 @@ std::shared_ptr<FSNode> Vfs::resolveParent(const std::string& path, std::string&
 
 void Vfs::cd(const std::string& path) {
     auto dest = resolve(path);
-    if (!dest)          throw VfsException(ErrorType::PathError, 0);    // Path not found
-    if (dest->isFile)   throw VfsException(ErrorType::InvalidArg, 1);   // Not a directory
+    if (!dest)          throw VfsException(ErrorType::PathError, 0);
+    if (dest->isFile)   throw VfsException(ErrorType::InvalidArg, 1);
     cwd_ = dest;
 }
 
 void Vfs::mkdir(const std::string& path) {
-    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);     // Invalid name
+    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);
     std::string name;
     auto parent = resolveParent(path, name);
     if (!parent)             throw VfsException(ErrorType::PathError, 0);
@@ -103,8 +103,8 @@ void Vfs::mv(const std::string& src, const std::string& dstDir) {
     if (node==root_) throw VfsException(ErrorType::RootError, 4);
 
     auto dst = resolve(dstDir);
-    if (!dst)         throw VfsException(ErrorType::PathError, 8);  // dest not found
-    if (dst->isFile)  throw VfsException(ErrorType::InvalidArg, 9); // dest not dir
+    if (!dst)         throw VfsException(ErrorType::PathError, 8);
+    if (dst->isFile)  throw VfsException(ErrorType::InvalidArg, 9);
     if (!node->isFile && isSubtreeOf(dst, node))
         throw VfsException(ErrorType::Conflict, 5);
 
@@ -151,7 +151,6 @@ void Vfs::saveJson(const std::string& jsonPath) const {
         throw VfsException(ErrorType::IOError, 6);
 }
 
-// ===== helpers =====
 std::string Vfs::fullPathOf(const std::shared_ptr<FSNode>& n) {
     if (!n) return "/";
     std::vector<std::string> parts;

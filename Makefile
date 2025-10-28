@@ -1,5 +1,5 @@
 CXX      := g++
-CXXFLAGS := -std=gnu++17 -O2 -Wall -Wextra -Wpedantic
+CXXFLAGS := -std=gnu++23 -O2 -Wall -Wextra -Wpedantic
 INCLUDES := -Iinclude
 
 # ядро (без main)
@@ -30,18 +30,14 @@ src/%.o: src/%.cpp
 tests/%.o: tests/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# тестовые бинарники
 bin/%: tests/%.o $(OBJS_CORE) | dirs
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-# быстрый запуск CLI
 run: $(BIN)
 	./$(BIN)
 
-# сборка всех тестов
 tests: $(TEST_BINS)
 
-# запуск всех тестов (по очереди)
 run_tests: tests
 	@for t in $(TEST_BINS); do \
 	  echo "===== RUN $$t ====="; \
@@ -49,7 +45,5 @@ run_tests: tests
 	done
 	@echo "All tests passed."
 
-# чистка
 clean:
 	rm -f src/*.o tests/*.o $(BIN) $(TEST_BINS) ./*.json
-

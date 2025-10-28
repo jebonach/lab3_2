@@ -4,7 +4,6 @@
 #include <iostream>
 
 int main() {
-    // find
     {
         Vfs v;
         v.createFile("/f1.txt");
@@ -13,7 +12,7 @@ int main() {
         auto no = v.findFileByName("nope.txt");
         assert(no == nullptr);
     }
-    // save OK и save ошибка (не существующая папка)
+    
     {
         Vfs v;
         v.mkdir("/dir");

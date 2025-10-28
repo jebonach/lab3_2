@@ -4,7 +4,6 @@
 #include <iostream>
 
 int main() {
-    // mkdir/create успешные
     {
         Vfs v;
         v.mkdir("/dir");
@@ -12,7 +11,7 @@ int main() {
         auto f = v.findFileByName("file.txt");
         assert(f && f->name=="file.txt" && f->isFile);
     }
-    // дубликаты
+    
     {
         Vfs v;
         v.mkdir("/x");
@@ -26,7 +25,7 @@ int main() {
             assert(ex.type()==ErrorType::InvalidArg && ex.code()==2);
         }
     }
-    // invalid name
+    
     {
         Vfs v;
         try { v.mkdir(""); assert(!"must throw"); }

@@ -11,7 +11,9 @@ class Vfs {
 public:
     Vfs();
 
-    [[nodiscard]] std::string pwd() const noexcept;
+    [[nodiscard("не игнорирь тварь возвращаемый путь")]]
+    std::string pwd() const noexcept;
+
     void cd(const std::string& path);
 
     void mkdir(const std::string& path);
@@ -21,15 +23,15 @@ public:
                     const std::string& newName);
     void mv(const std::string& src, const std::string& dstDir);
 
-
     void ls(const std::string& path = "") const;
     void printTree() const;
 
-    [[nodiscard]] std::shared_ptr<FSNode>
-    findFileByName(const std::string& name) const;
+
+    [[nodiscard("ты забыл проверить на nullptr")]]
+    std::shared_ptr<FSNode> findFileByName(const std::string& name) const;
 
     void saveJson(const std::string& jsonPath) const;
-    
+
 private:
     using NodePtr  = std::shared_ptr<FSNode>;
     using WNodePtr = std::weak_ptr<FSNode>;
@@ -37,12 +39,13 @@ private:
     NodePtr root_;
     NodePtr cwd_;
 
-    
     BStarTree<std::string, WNodePtr> fileIndex_;
 
-    [[nodiscard]] NodePtr resolve(const std::string& path) const;
-    [[nodiscard]] NodePtr resolveParent(const std::string& path,
-                                        std::string& leafName) const;
+    [[nodiscard("и туут тоже nullptr забыл")]]
+    NodePtr resolve(const std::string& path) const;
+
+    [[nodiscard("тут думать надо nullptr или нет")]]
+    NodePtr resolveParent(const std::string& path, std::string& leafName) const;
 
     static std::string fullPathOf(const NodePtr& n);
     static void        printTreeRec(const NodePtr& n, int depth);

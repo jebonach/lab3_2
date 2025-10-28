@@ -34,14 +34,14 @@ void toJsonRec(const std::shared_ptr<FSNode>& n, std::ostringstream& out, int in
 }
 }
 
-namespace JsonIO {
-bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
-                        const std::string& path) {
-    std::ofstream f(path);
-    if (!f) return false;
-    std::ostringstream out;
-    toJsonRec(root, out, 0);
-    f << out.str() << "\n";
-    return true;
-}
-}
+// namespace JsonIO {
+// bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
+//                         const std::string& path) {
+//     std::ofstream f(path);
+//     if (!f) return false;
+//     std::ostringstream out;
+//     toJsonRec(root, out, 0);
+//     f << out.str() << "\n";
+//     return true;
+// }
+// }
