@@ -9,12 +9,32 @@
 #include <string_view>
 
 static void printHelp() {
-    std::cout
-      << "Commands:\n"
-      << "  pwd\n  ls [path]\n  cd <path>\n"
-      << "  mkdir <path>\n  create <path>\n"
-      << "  rm <path>\n  rename <path> <newname>\n  mv <src> <dst_dir>\n"
-      << "  find <filename>\n  tree\n  save <file.json>\n  help\n  exit\n";
+    std::cout << "Commands:\n";
+    std::cout << "pwd\n";
+    std::cout << "ls [path]\n";
+    std::cout << "cd <path>\n";
+    std::cout << "mkdir <path>\n";
+    std::cout << "rm <path>\n";
+    std::cout << "rename <path> <newname>\n";
+    std::cout << "tree\n";
+    std::cout << "help\n";
+    std::cout << "exit\n";
+
+
+        // std::cout << "Commands:\n
+        // pwd\n
+        // ls [path]\n
+        // cd <path>\n
+        // mkdir <path>\n
+        // create <path>\n
+        // rm <path>\n
+        // rename <path> <newname>\n
+        // mv <src> <dst_dir>\n
+        // find <filename>\n  
+        // tree\n
+        // save <file.json>\n
+        // help\n
+        // exit\n";
 }
 
 enum class Cmd { Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv, Find, Tree, Save, Unknown };
@@ -32,7 +52,7 @@ static Cmd parseCmd(std::string_view s) {
     if (s=="mv")     return Cmd::Mv;
     if (s=="find")   return Cmd::Find;
     if (s=="tree")   return Cmd::Tree;
-    if (s=="save")   return Cmd::Save;
+    // if (s=="save")   return Cmd::Save;
     return Cmd::Unknown;
 }
 
@@ -99,10 +119,10 @@ static void doFind(Vfs& v, const std::vector<std::string>& a){
     else    std::cout << "found: " << fullPathOfNode(n) << "\n";
 }
 static void doTree(Vfs& v, const std::vector<std::string>&){ v.printTree(); }
-static void doSave(Vfs& v, const std::vector<std::string>& a){
-    if (a.size() != 1) { printUsage("save","<file.json>"); return; }
-    v.saveJson(a[0]);
-}
+// static void doSave(Vfs& v, const std::vector<std::string>& a){
+//     if (a.size() != 1) { printUsage("save","<file.json>"); return; }
+//     v.saveJson(a[0]);
+// }
 
 // ---------- Main loop ----------
 void runVfsCLI() {
@@ -134,7 +154,7 @@ void runVfsCLI() {
                 case Cmd::Mv:     doMv(vfs, args);     break;
                 case Cmd::Find:   doFind(vfs, args);   break;
                 case Cmd::Tree:   doTree(vfs, args);   break;
-                case Cmd::Save:   doSave(vfs, args);   break;
+                // case Cmd::Save:   doSave(vfs, args);   break;
                 case Cmd::Unknown:
                 default: std::cout << "unknown command (type 'help')\n"; break;
             }

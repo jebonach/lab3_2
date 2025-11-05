@@ -146,10 +146,10 @@ std::shared_ptr<FSNode> Vfs::findFileByName(const std::string& name) const {
     return nullptr;
 }
 
-void Vfs::saveJson(const std::string& jsonPath) const {
-    if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
-        throw VfsException(ErrorType::IOError, 6);
-}
+// void Vfs::saveJson(const std::string& jsonPath) const {
+//     if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
+//         throw VfsException(ErrorType::IOError, 6);
+// }
 
 std::string Vfs::fullPathOf(const std::shared_ptr<FSNode>& n) {
     if (!n) return "/";

@@ -6,12 +6,10 @@ INCLUDES := -Iinclude
 SRCS_CORE := src/Vfs.cpp src/JsonIO.cpp src/ui.cpp
 OBJS_CORE := $(SRCS_CORE:.cpp=.o)
 
-# основной бин
 BIN := vfs_cli
 
-# тесты
-TESTS := test_nav test_create test_rm test_rename_mv test_find_save
-TEST_BINS := $(addprefix bin/,$(TESTS))
+TESTS := test_nav test_create test_rm test_rename_mv test_find_save test_bstar
+
 TEST_OBJS := $(addprefix tests/,$(addsuffix .o,$(TESTS)))
 
 .PHONY: all clean run tests run_tests dirs
