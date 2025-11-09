@@ -1,67 +1,43 @@
 #pragma once
+#include <map>
 #include <string>
-#include <vector>
-#include <cstdint>
-#include <iostream>
+#include <stdexcept>
 
-// Категории ошибок VFS
-enum class ErrorType {
-    PathError,
-    InvalidArg,
-    Conflict,
-    RootError,
-    IOError,
-    Unknown
+enum class ErrorCode {
+    NotFound,
+    AlreadyExists,
+    NotADirectory,
+    IsADirectory,
+    InvalidPath,
+    PermissionDenied,
+    EmptyFileName,
+    FileExpected,
+    DirectoryExpected,
+    ReadError,
+    WriteError
 };
 
-class VfsException {
+inline const std::map<ErrorCode, std::string> g_errorTable = {
+    {ErrorCode::NotFound, "Файл или директория не найдены"},
+    {ErrorCode::AlreadyExists, "Файл или директория уже существуют"},
+    {ErrorCode::NotADirectory, "Ожидалась директория"},
+    {ErrorCode::IsADirectory, "Ожидался файл, но передана директория"},
+    {ErrorCode::InvalidPath, "Неверный путь"},
+    {ErrorCode::PermissionDenied, "Отказано в доступе"},
+    {ErrorCode::EmptyFileName, "Имя файла не может быть пустым"},
+    {ErrorCode::FileExpected, "Ожидался файл"},
+    {ErrorCode::DirectoryExpected, "Ожидалась директория"},
+    {ErrorCode::ReadError, "Ошибка при чтении файла"},
+    {ErrorCode::WriteError, "Ошибка при записи в файл"}
+};
+
+class VfsException : public std::runtime_error {
 public:
-    VfsException(ErrorType t, int code) noexcept : type_(t), code_(code) {}
-    const char* what() const noexcept { return "VfsException"; }
-    ErrorType type() const noexcept { return type_; }
-    int code() const noexcept { return code_; }
-private:
-    ErrorType type_;
-    int code_;
+    ErrorCode code;
+    explicit VfsException(ErrorCode code)
+        : std::runtime_error(g_errorTable.at(code)), code(code) {}
 };
 
-struct ErrorInfo { int code; const char* message; };
-
-inline const std::vector<ErrorInfo> g_errorTable = {
-    {0, "Path not found"},
-    {1, "Not a directory"},
-    {2, "Already exists"},
-    {3, "Invalid name"},
-    {4, "Operation not allowed on root"},
-    {5, "Destination is a subdirectory of source"},
-    {6, "I/O error while saving"},
-    {7, "Parent missing (internal)"},
-    {8, "Destination path not found"},
-    {9, "Destination is not a directory"}
-};
-
-inline const char* getErrorMessage(int code) {
-    for (auto& e : g_errorTable) if (e.code == code) return e.message;
-    return "Unknown error code";
-}
-
-inline const char* typeName(ErrorType t) {
-    switch (t) {
-        case ErrorType::PathError:  return "PathError";
-        case ErrorType::InvalidArg: return "InvalidArg";
-        case ErrorType::Conflict:   return "Conflict";
-        case ErrorType::RootError:  return "RootError";
-        case ErrorType::IOError:    return "IOError";
-        default:                    return "Unknown";
-    }
-}
-
-inline void handleException(const VfsException& ex) {
-    std::cout << "[" << typeName(ex.type()) << "] "
-              << "code=" << ex.code() << " => "
-              << getErrorMessage(ex.code()) << "\n";
-
-    if (ex.code() == 6) {
-        std::cout << "hint: check path/permissions for save target\n";
-    }
+inline void throwIf(bool cond, ErrorCode code) {
+    if (cond) throw VfsException(code);
 }

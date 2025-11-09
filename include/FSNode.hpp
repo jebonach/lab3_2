@@ -1,15 +1,24 @@
 #pragma once
+
 #include <memory>
-#include <map>
 #include <string>
+#include <vector>
+#include <map>
+#include <optional>
 
-struct FSNode : std::enable_shared_from_this<FSNode> {
+struct FSNode {
     std::string name;
-    bool isFile = false;
-
+    bool isFile;
     std::weak_ptr<FSNode> parent;
     std::map<std::string, std::shared_ptr<FSNode>> children;
-    std::string data;
 
-    explicit FSNode(std::string n, bool file) : name(std::move(n)), isFile(file) {}
+    using FileContent = std::vector<uint8_t>;
+    FileContent content;
+
+    explicit FSNode(std::string name, bool isFile);
+
+    std::shared_ptr<FSNode> getChild(const std::string& name) const;
+    void addChild(const std::shared_ptr<FSNode>& child);
+    void removeChild(const std::string& name);
+    bool hasChild(const std::string& name) const;
 };
