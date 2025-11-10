@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <cstring>
 #include "Errors.hpp"
 
 class FileContent {
@@ -18,14 +19,16 @@ public:
 
     // POD helpers
     template<class T>
-    void writeValue(std::size_t off, const T& v){
+    void writeValue(std::size_t off, const T& v) {
         const byte* p = reinterpret_cast<const byte*>(&v);
-        write(off, std::vector<byte>(p, p+sizeof(T)));
+        write(off, std::vector<byte>(p, p + sizeof(T)));
     }
+
     template<class T>
-    T readValue(std::size_t off) const{
+    T readValue(std::size_t off) const {
         auto b = read(off, sizeof(T));
-        if (b.size()!=sizeof(T)) throwErr(Errc::OutOfRange, "FileContent::readValue", "not enough bytes");
+        if (b.size() != sizeof(T))
+            throwErr(Errc::OutOfRange, "FileContent::readValue", "not enough bytes");
         T v{};
         std::memcpy(&v, b.data(), sizeof(T));
         return v;

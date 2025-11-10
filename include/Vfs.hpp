@@ -18,6 +18,11 @@ public:
     void rm(const std::string& path);
     void renameNode(const std::string& path, const std::string& newName);
     void mv(const std::string& src, const std::string& dstDir);
+    std::string readFile(const std::string& path) const;
+    void writeFile(const std::string& path, const std::string& content, bool append);
+    void compressFile(const std::string& path);
+    void decompressFile(const std::string& path);
+
 
     void writeToFile(const std::string& path, const std::string& content);
     [[nodiscard("check file content")]] std::string readFile(const std::string& path) const;

@@ -146,10 +146,10 @@ std::shared_ptr<FSNode> Vfs::findFileByName(const std::string& name) const {
     return nullptr;
 }
 
-// void Vfs::saveJson(const std::string& jsonPath) const {
-//     if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
-//         throw VfsException(ErrorType::IOError, 6);
-// }
+void Vfs::saveJson(const std::string& jsonPath) const {
+    if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
+        throw VfsException(ErrorType::IOError, 6);
+}
 
 std::string Vfs::fullPathOf(const std::shared_ptr<FSNode>& n) {
     if (!n) return "/";
@@ -189,4 +189,51 @@ void Vfs::indexEraseIfFile(const std::shared_ptr<FSNode>& n) {
 void Vfs::indexEraseSubtree(const std::shared_ptr<FSNode>& n) {
     if (n->isFile) indexEraseIfFile(n);
     else for (auto& [_, ch] : n->children) indexEraseSubtree(ch);
+}
+
+std::string Vfs::readFile(const std::string& path) const {
+    auto f = resolve(path);
+    if (!f) throw VfsException(ErrorType::PathError, 0);
+    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    return f->content.asText();
+}
+
+void Vfs::writeFile(const std::string& path, const std::string& content, bool append) {
+    auto f = resolve(path);
+    if (!f) throw VfsException(ErrorType::PathError, 0);
+    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (append) f->content.append(std::vector<uint8_t>(content.begin(), content.end()));
+    else        f->content.assignText(content);
+}
+
+void Vfs::compressFile(const std::string& path) {
+    auto f = resolve(path);
+    if (!f) throw VfsException(ErrorType::PathError, 0);
+    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+
+    const auto& data = f->content.bytes();
+    std::vector<uint8_t> encoded;
+    for (size_t i = 0; i < data.size(); ) {
+        uint8_t b = data[i];
+        size_t j = i + 1;
+        while (j < data.size() && data[j] == b && j - i < 255) ++j;
+        encoded.push_back(static_cast<uint8_t>(j - i));
+        encoded.push_back(b);
+        i = j;
+    }
+    f->content.replaceAll(encoded);
+}
+
+void Vfs::decompressFile(const std::string& path) {
+    auto f = resolve(path);
+    if (!f) throw VfsException(ErrorType::PathError, 0);
+    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+
+    const auto& data = f->content.bytes();
+    std::vector<uint8_t> decoded;
+    for (size_t i = 0; i + 1 < data.size(); i += 2) {
+        uint8_t count = data[i], value = data[i + 1];
+        decoded.insert(decoded.end(), count, value);
+    }
+    f->content.replaceAll(decoded);
 }
