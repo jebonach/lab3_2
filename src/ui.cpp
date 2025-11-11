@@ -1,7 +1,7 @@
 #include "ui.hpp"
 #include "Vfs.hpp"
 #include "Errors.hpp"
-#include "StreamIO.hpp"
+#include "OIStream.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -174,7 +174,6 @@ static void doDecompress(Vfs& v, const std::vector<std::string>& a){
     v.decompressFile(a[0]);
 }
 
-// ========== Главный цикл ==========
 void runVfsCLI() {
     Vfs vfs;
 

@@ -12,8 +12,8 @@ namespace FileCommands {
 
 static std::shared_ptr<FSNode> resolveFile(Vfs& vfs, const std::string& path) {
     auto node = vfs.resolve(path);
-    if (!node) throwErr(Errc::NotFound, "resolveFile", "file not found: " + path);
-    if (!node->isFile()) throwErr(Errc::NotAFile, "resolveFile", "not a file: " + path);
+    if (!node) throw VfsException(ErrorCode::NotFound);
+    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
     return node;
 }
 
@@ -32,8 +32,8 @@ void echo(Vfs& vfs, const std::vector<std::string>& args) {
         return;
     }
     std::ostringstream oss;
-    for (size_t i = 0; i+2 < args.size(); ++i)
-        oss << args[i] << (i+3 < args.size() ? " " : "");
+    for (size_t i = 0; i + 2 < args.size(); ++i)
+        oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
     file->content.assignText(oss.str());
 }
@@ -44,11 +44,10 @@ void echoAppend(Vfs& vfs, const std::vector<std::string>& args) {
         return;
     }
     std::ostringstream oss;
-    for (size_t i = 0; i+2 < args.size(); ++i)
-        oss << args[i] << (i+3 < args.size() ? " " : "");
+    for (size_t i = 0; i + 2 < args.size(); ++i)
+        oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
-    auto cur = file->content.asText();
-    file->content.assignText(cur + oss.str());
+    file->content.append(std::vector<uint8_t>(oss.str().begin(), oss.str().end()));
 }
 
 void nano(Vfs& vfs, const std::vector<std::string>& args) {
@@ -76,8 +75,9 @@ void read(Vfs& vfs, const std::vector<std::string>& args) {
     std::size_t off = args.size() > 1 ? std::stoull(args[1]) : 0;
     std::size_t cnt = args.size() > 2 ? std::stoull(args[2]) : file->content.size() - off;
     auto bytes = file->content.read(off, cnt);
-    for (auto b : bytes) std::cout << std::hex << std::uppercase
-        << "0x" << int(b) << " ";
+    for (auto b : bytes) {
+        std::cout << std::hex << std::uppercase << "0x" << static_cast<int>(b) << " ";
+    }
     std::cout << "\n";
 }
 

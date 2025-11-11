@@ -2,6 +2,7 @@
 #include <map>
 #include <string>
 #include <stdexcept>
+#include <iostream>
 
 enum class ErrorCode {
     NotFound,
@@ -14,7 +15,15 @@ enum class ErrorCode {
     FileExpected,
     DirectoryExpected,
     ReadError,
-    WriteError
+    WriteError,
+    OutOfRange,
+    PathError,
+    InvalidArg,
+    RootError,
+    IOError,
+    Conflict,
+    Corrupted,
+    Unsupported
 };
 
 inline const std::map<ErrorCode, std::string> g_errorTable = {
@@ -28,7 +37,15 @@ inline const std::map<ErrorCode, std::string> g_errorTable = {
     {ErrorCode::FileExpected, "Ожидался файл"},
     {ErrorCode::DirectoryExpected, "Ожидалась директория"},
     {ErrorCode::ReadError, "Ошибка при чтении файла"},
-    {ErrorCode::WriteError, "Ошибка при записи в файл"}
+    {ErrorCode::WriteError, "Ошибка при записи в файл"},
+    {ErrorCode::OutOfRange, "Выход за пределы файла"},
+    {ErrorCode::PathError, "Ошибка пути"},
+    {ErrorCode::InvalidArg, "Неверный аргумент"},
+    {ErrorCode::RootError, "Операция запрещена с корневым узлом"},
+    {ErrorCode::IOError, "Ошибка ввода/вывода"},
+    {ErrorCode::Conflict, "Конфликт узлов"},
+    {ErrorCode::Corrupted, "Повреждённые данные"},
+    {ErrorCode::Unsupported, "Формат или алгоритм не поддерживается"}
 };
 
 class VfsException : public std::runtime_error {
@@ -40,4 +57,8 @@ public:
 
 inline void throwIf(bool cond, ErrorCode code) {
     if (cond) throw VfsException(code);
+}
+
+inline void handleException(const VfsException& ex) {
+    std::cerr << "Ошибка: " << ex.what() << "\n";
 }

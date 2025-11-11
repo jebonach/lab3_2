@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <optional>
+#include "FileContent.hpp"
 
 struct FSNode {
     std::string name;
@@ -12,10 +13,7 @@ struct FSNode {
     std::weak_ptr<FSNode> parent;
     std::map<std::string, std::shared_ptr<FSNode>> children;
 
-    using FileContent = std::vector<uint8_t>;
     FileContent content;
-
-    explicit FSNode(std::string name, bool isFile);
 
     std::shared_ptr<FSNode> getChild(const std::string& name) const;
     void addChild(const std::shared_ptr<FSNode>& child);

@@ -3,6 +3,7 @@
 #include "JsonIO.hpp"
 #include <iostream>
 #include <vector>
+#include "FileContent.hpp"
 
 Vfs::Vfs() : fileIndex_(7) {
     root_ = std::make_shared<FSNode>("/", false);
@@ -45,34 +46,34 @@ std::shared_ptr<FSNode> Vfs::resolveParent(const std::string& path, std::string&
 
 void Vfs::cd(const std::string& path) {
     auto dest = resolve(path);
-    if (!dest)          throw VfsException(ErrorType::PathError, 0);
-    if (dest->isFile)   throw VfsException(ErrorType::InvalidArg, 1);
+    if (!dest)          throw VfsException(ErrorCode::PathError);
+    if (dest->isFile)   throw VfsException(ErrorCode::InvalidArg);
     cwd_ = dest;
 }
 
 void Vfs::mkdir(const std::string& path) {
-    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);
+    if (path.empty()) throw VfsException(ErrorCode::InvalidArg);
     std::string name;
     auto parent = resolveParent(path, name);
-    if (!parent)             throw VfsException(ErrorType::PathError, 0);
-    if (parent->isFile)      throw VfsException(ErrorType::InvalidArg, 1);
+    if (!parent)             throw VfsException(ErrorCode::PathError);
+    if (parent->isFile)      throw VfsException(ErrorCode::InvalidArg);
     if (name.empty() || name=="." || name==".." || name.find('/')!=std::string::npos)
-        throw VfsException(ErrorType::InvalidArg, 3);
-    if (parent->children.count(name)) throw VfsException(ErrorType::InvalidArg, 2);
+        throw VfsException(ErrorCode::InvalidArg);
+    if (parent->children.count(name)) throw VfsException(ErrorCode::InvalidArg);
     auto dir = std::make_shared<FSNode>(name, false);
     dir->parent = parent;
     parent->children.emplace(name, dir);
 }
 
 void Vfs::createFile(const std::string& path) {
-    if (path.empty()) throw VfsException(ErrorType::InvalidArg, 3);
+    if (path.empty()) throw VfsException(ErrorCode::InvalidArg);
     std::string name;
     auto parent = resolveParent(path, name);
-    if (!parent)        throw VfsException(ErrorType::PathError, 0);
-    if (parent->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (!parent)        throw VfsException(ErrorCode::PathError);
+    if (parent->isFile) throw VfsException(ErrorCode::InvalidArg);
     if (name.empty() || name=="." || name==".." || name.find('/')!=std::string::npos)
-        throw VfsException(ErrorType::InvalidArg, 3);
-    if (parent->children.count(name)) throw VfsException(ErrorType::InvalidArg, 2);
+        throw VfsException(ErrorCode::InvalidArg);
+    if (parent->children.count(name)) throw VfsException(ErrorCode::InvalidArg);
     auto f = std::make_shared<FSNode>(name, true);
     f->parent = parent;
     parent->children.emplace(name, f);
@@ -81,14 +82,14 @@ void Vfs::createFile(const std::string& path) {
 
 void Vfs::renameNode(const std::string& path, const std::string& newName) {
     if (newName.empty() || newName=="." || newName==".." || newName.find('/')!=std::string::npos)
-        throw VfsException(ErrorType::InvalidArg, 3);
+        throw VfsException(ErrorCode::InvalidArg);
 
     auto n = resolve(path);
-    if (!n)            throw VfsException(ErrorType::PathError, 0);
-    if (n==root_)      throw VfsException(ErrorType::RootError, 4);
+    if (!n)            throw VfsException(ErrorCode::PathError);
+    if (n==root_)      throw VfsException(ErrorCode::RootError);
     auto p = n->parent.lock();
-    if (!p)            throw VfsException(ErrorType::PathError, 7);
-    if (p->children.count(newName)) throw VfsException(ErrorType::InvalidArg, 2);
+    if (!p)            throw VfsException(ErrorCode::PathError);
+    if (p->children.count(newName)) throw VfsException(ErrorCode::InvalidArg);
 
     if (n->isFile) indexEraseIfFile(n);
     p->children.erase(n->name);
@@ -99,18 +100,18 @@ void Vfs::renameNode(const std::string& path, const std::string& newName) {
 
 void Vfs::mv(const std::string& src, const std::string& dstDir) {
     auto node = resolve(src);
-    if (!node) throw VfsException(ErrorType::PathError, 0);
-    if (node==root_) throw VfsException(ErrorType::RootError, 4);
+    if (!node) throw VfsException(ErrorCode::PathError);
+    if (node==root_) throw VfsException(ErrorCode::RootError);
 
     auto dst = resolve(dstDir);
-    if (!dst)         throw VfsException(ErrorType::PathError, 8);
-    if (dst->isFile)  throw VfsException(ErrorType::InvalidArg, 9);
+    if (!dst)         throw VfsException(ErrorCode::PathError);
+    if (dst->isFile)  throw VfsException(ErrorCode::InvalidArg);
     if (!node->isFile && isSubtreeOf(dst, node))
-        throw VfsException(ErrorType::Conflict, 5);
+        throw VfsException(ErrorCode::Conflict);
 
     auto p = node->parent.lock();
-    if (!p) throw VfsException(ErrorType::PathError, 7);
-    if (dst->children.count(node->name)) throw VfsException(ErrorType::InvalidArg, 2);
+    if (!p) throw VfsException(ErrorCode::PathError);
+    if (dst->children.count(node->name)) throw VfsException(ErrorCode::InvalidArg);
 
     p->children.erase(node->name);
     node->parent = dst;
@@ -119,10 +120,10 @@ void Vfs::mv(const std::string& src, const std::string& dstDir) {
 
 void Vfs::rm(const std::string& path) {
     auto node = resolve(path);
-    if (!node)   throw VfsException(ErrorType::PathError, 0);
-    if (node==root_) throw VfsException(ErrorType::RootError, 4);
+    if (!node)   throw VfsException(ErrorCode::PathError);
+    if (node==root_) throw VfsException(ErrorCode::RootError);
     auto p = node->parent.lock();
-    if (!p) throw VfsException(ErrorType::PathError, 7);
+    if (!p) throw VfsException(ErrorCode::PathError);
 
     indexEraseSubtree(node);
     p->children.erase(node->name);
@@ -130,8 +131,8 @@ void Vfs::rm(const std::string& path) {
 
 void Vfs::ls(const std::string& path) const {
     auto n = path.empty() ? cwd_ : resolve(path);
-    if (!n)         throw VfsException(ErrorType::PathError, 0);
-    if (n->isFile)  throw VfsException(ErrorType::InvalidArg, 1);
+    if (!n)         throw VfsException(ErrorCode::PathError);
+    if (n->isFile)  throw VfsException(ErrorCode::InvalidArg);
     for (auto& [name, child] : n->children) {
         std::cout << (child->isFile? "  📄 ":"  📁 ") << name << (child->isFile? "" : "/") << "\n";
     }
@@ -148,7 +149,7 @@ std::shared_ptr<FSNode> Vfs::findFileByName(const std::string& name) const {
 
 void Vfs::saveJson(const std::string& jsonPath) const {
     if (!JsonIO::saveTreeToJsonFile(root_, jsonPath))
-        throw VfsException(ErrorType::IOError, 6);
+        throw VfsException(ErrorCode::IOError);
 }
 
 std::string Vfs::fullPathOf(const std::shared_ptr<FSNode>& n) {
@@ -193,23 +194,23 @@ void Vfs::indexEraseSubtree(const std::shared_ptr<FSNode>& n) {
 
 std::string Vfs::readFile(const std::string& path) const {
     auto f = resolve(path);
-    if (!f) throw VfsException(ErrorType::PathError, 0);
-    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (!f) throw VfsException(ErrorCode::PathError);
+    if (!f->isFile) throw VfsException(ErrorCode::InvalidArg);
     return f->content.asText();
 }
 
 void Vfs::writeFile(const std::string& path, const std::string& content, bool append) {
     auto f = resolve(path);
-    if (!f) throw VfsException(ErrorType::PathError, 0);
-    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (!f) throw VfsException(ErrorCode::PathError);
+    if (!f->isFile) throw VfsException(ErrorCode::InvalidArg);
     if (append) f->content.append(std::vector<uint8_t>(content.begin(), content.end()));
     else        f->content.assignText(content);
 }
 
 void Vfs::compressFile(const std::string& path) {
     auto f = resolve(path);
-    if (!f) throw VfsException(ErrorType::PathError, 0);
-    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (!f) throw VfsException(ErrorCode::PathError);
+    if (!f->isFile) throw VfsException(ErrorCode::InvalidArg);
 
     const auto& data = f->content.bytes();
     std::vector<uint8_t> encoded;
@@ -226,8 +227,8 @@ void Vfs::compressFile(const std::string& path) {
 
 void Vfs::decompressFile(const std::string& path) {
     auto f = resolve(path);
-    if (!f) throw VfsException(ErrorType::PathError, 0);
-    if (!f->isFile) throw VfsException(ErrorType::InvalidArg, 1);
+    if (!f) throw VfsException(ErrorCode::PathError);
+    if (!f->isFile) throw VfsException(ErrorCode::InvalidArg);
 
     const auto& data = f->content.bytes();
     std::vector<uint8_t> decoded;

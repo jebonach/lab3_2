@@ -8,6 +8,9 @@
 
 class Vfs {
 public:
+    using NodePtr = std::shared_ptr<FSNode>;
+    using WNodePtr = std::weak_ptr<FSNode>;
+
     Vfs();
 
     [[nodiscard("use result")]] std::string pwd() const noexcept;
@@ -18,14 +21,13 @@ public:
     void rm(const std::string& path);
     void renameNode(const std::string& path, const std::string& newName);
     void mv(const std::string& src, const std::string& dstDir);
-    std::string readFile(const std::string& path) const;
     void writeFile(const std::string& path, const std::string& content, bool append);
     void compressFile(const std::string& path);
     void decompressFile(const std::string& path);
 
-
     void writeToFile(const std::string& path, const std::string& content);
     [[nodiscard("check file content")]] std::string readFile(const std::string& path) const;
+    [[nodiscard("check node")]] NodePtr resolve(const std::string& path) const;  // теперь знает про NodePtr
 
     void ls(const std::string& path = "") const;
     void printTree() const;
@@ -36,14 +38,10 @@ public:
     void loadJson(const std::string& jsonPath);
 
 private:
-    using NodePtr = std::shared_ptr<FSNode>;
-    using WNodePtr = std::weak_ptr<FSNode>;
-
     NodePtr root_;
     NodePtr cwd_;
     BStarTree<std::string, WNodePtr> fileIndex_;
 
-    [[nodiscard("check node")]] NodePtr resolve(const std::string& path) const;
     [[nodiscard("check parent")]] NodePtr resolveParent(const std::string& path, std::string& leafName) const;
 
     static std::string fullPathOf(const NodePtr& n);

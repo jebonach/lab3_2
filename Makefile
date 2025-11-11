@@ -1,47 +1,42 @@
-CXX      := g++
-CXXFLAGS := -std=gnu++23 -O2 -Wall -Wextra -Wpedantic
-INCLUDES := -Iinclude
+CXX = g++
+CXXFLAGS = -std=gnu++23 -O2 -Wall -Wextra -Wpedantic -Iinclude
+LDFLAGS = 
+SRC_DIR = src
+TEST_DIR = tests
+BUILD_DIR = bin
+INCLUDE_DIR = include
 
-# ядро (без main)
-SRCS_CORE := src/Vfs.cpp src/JsonIO.cpp src/ui.cpp
-OBJS_CORE := $(SRCS_CORE:.cpp=.o)
+SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
 
-BIN := vfs_cli
+TEST_SRCS = $(wildcard $(TEST_DIR)/*.cpp)
+TEST_OBJS = $(TEST_SRCS:$(TEST_DIR)/%.cpp=$(BUILD_DIR)/%.test.o)
+TEST_BINS = $(TEST_SRCS:$(TEST_DIR)/%.cpp=$(BUILD_DIR)/test_%)
 
-TESTS := test_nav test_create test_rm test_rename_mv test_find_save test_bstar
+TARGET = $(BUILD_DIR)/main
 
-TEST_OBJS := $(addprefix tests/,$(addsuffix .o,$(TESTS)))
+.PHONY: all clean test
 
-.PHONY: all clean run tests run_tests dirs
+all: $(TARGET)
 
-all: dirs $(BIN)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-dirs:
-	mkdir -p bin
+$(TARGET): $(BUILD_DIR) $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
-$(BIN): src/main.o $(OBJS_CORE)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/%.o: src/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+# Unit tests
+test: $(TEST_BINS)
+	@for t in $(TEST_BINS); do echo "Running $$t..."; ./$$t || exit 1; done
 
-tests/%.o: tests/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+$(BUILD_DIR)/%.test.o: $(TEST_DIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-bin/%: tests/%.o $(OBJS_CORE) | dirs
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
-
-run: $(BIN)
-	./$(BIN)
-
-tests: $(TEST_BINS)
-
-run_tests: tests
-	@for t in $(TEST_BINS); do \
-	  echo "===== RUN $$t ====="; \
-	  ./$$t || exit 1; \
-	done
-	@echo "All tests passed."
+$(BUILD_DIR)/test_%: $(BUILD_DIR)/%.test.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -f src/*.o tests/*.o $(BIN) $(TEST_BINS) ./*.json
+	rm -rf $(BUILD_DIR)
