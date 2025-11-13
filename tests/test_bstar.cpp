@@ -1,8 +1,10 @@
 #include "BStarTree.hpp"
 #include <cassert>
+#include <cctype>
 #include <iostream>
 #include <random>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 template <typename T>
@@ -11,6 +13,57 @@ static void expect_true(bool cond, const T& msg) {
         std::cerr << "FAILED: " << msg << "\n";
         std::abort();
     }
+}
+
+static void test_contains_size_and_clear() {
+    BStarTree<int,int> t(5);
+    expect_true(t.size() == 0, "size initially zero");
+    for (int i=0;i<20;++i) t.insert(i, i*2);
+    expect_true(t.size() == 20, "size after inserts");
+    for (int i=0;i<20;++i) expect_true(t.contains(i), "contains inserted key");
+    t.clear();
+    expect_true(t.size() == 0, "size after clear");
+    for (int i=0;i<20;++i) expect_true(!t.contains(i), "cleared tree missing key");
+}
+
+static void test_erase_missing_returns_false() {
+    BStarTree<int,int> t(5);
+    t.insert(1, 100);
+    bool removed = t.erase(2);
+    expect_true(!removed, "erase missing returns false");
+    expect_true(t.contains(1), "existing key survives");
+    t.validate();
+}
+
+static void test_invalid_branching_factor_rejected() {
+    bool threw = false;
+    try {
+        BStarTree<int,int> t(2);
+        (void)t;
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect_true(threw, "constructor rejects M<3");
+}
+
+struct CaseInsensitiveLess {
+    bool operator()(const std::string& lhs, const std::string& rhs) const {
+        auto normalize = [](const std::string& s) {
+            std::string out = s;
+            for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return out;
+        };
+        return normalize(lhs) < normalize(rhs);
+    }
+};
+
+static void test_custom_comparator() {
+    BStarTree<std::string, int, CaseInsensitiveLess> t(5);
+    t.insert("Key", 1);
+    t.insert("key", 2); // updates existing logically equal entry
+    auto v = t.find("KEY");
+    expect_true(v && *v == 2, "custom comparator equality");
+    t.validate();
 }
 
 static void test_basic_sorted() {
@@ -112,6 +165,10 @@ static void test_randomized() {
 }
 
 int main() {
+    test_contains_size_and_clear();
+    test_erase_missing_returns_false();
+    test_invalid_branching_factor_rejected();
+    test_custom_comparator();
     test_basic_sorted();
     test_basic_reverse();
     test_update_duplicates();

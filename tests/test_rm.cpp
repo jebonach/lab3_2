@@ -1,34 +1,56 @@
 #include "Vfs.hpp"
 #include "Errors.hpp"
+#include "TestUtils.hpp"
+
 #include <cassert>
 #include <iostream>
 
+static void test_remove_file_twice() {
+    Vfs v;
+    v.mkdir("/a");
+    v.createFile("/a/f");
+    v.rm("/a/f");
+    expectThrows(ErrorCode::PathError, [&]{ v.rm("/a/f"); });
+}
+
+static void test_recursive_directory_removal() {
+    Vfs v;
+    v.mkdir("/a");
+    v.mkdir("/a/b");
+    v.createFile("/a/b/c.txt");
+    v.createFile("/a/b/d.txt");
+
+    v.rm("/a/b");
+
+    expectThrows(ErrorCode::PathError, [&]{ v.cd("/a/b"); });
+    assert(!v.findFileByName("c.txt"));
+    assert(!v.findFileByName("d.txt"));
+}
+
+static void test_remove_root_is_forbidden() {
+    Vfs v;
+    expectThrows(ErrorCode::RootError, [&]{ v.rm("/"); });
+}
+
+static void test_remove_nonexistent_path() {
+    Vfs v;
+    expectThrows(ErrorCode::PathError, [&]{ v.rm("/missing"); });
+}
+
+static void test_remove_using_relative_paths() {
+    Vfs v;
+    v.mkdir("/dir");
+    v.cd("/dir");
+    v.createFile("note.txt");
+    v.rm("note.txt");
+    expectThrows(ErrorCode::PathError, [&]{ v.rm("note.txt"); });
+}
+
 int main() {
-    {
-        Vfs v;
-        v.mkdir("/a");
-        v.createFile("/a/f");
-        v.rm("/a/f");
-
-        try { v.rm("/a/f"); assert(!"must throw"); }
-        catch (const VfsException& ex) {
-            assert(ex.type()==ErrorType::PathError && ex.code()==0);
-        }
-        v.mkdir("/a/b");
-        v.createFile("/a/b/c");
-        v.rm("/a/b"); // удаляет рекурсивно
-        try { v.cd("/a/b"); assert(!"must throw"); }
-        catch (const VfsException& ex) {
-            assert(ex.type()==ErrorType::PathError && ex.code()==0);
-        }
-    }
-
-    {
-        Vfs v;
-        try { v.rm("/"); assert(!"must throw"); }
-        catch (const VfsException& ex) {
-            assert(ex.type()==ErrorType::RootError && ex.code()==4);
-        }
-    }
+    test_remove_file_twice();
+    test_recursive_directory_removal();
+    test_remove_root_is_forbidden();
+    test_remove_nonexistent_path();
+    test_remove_using_relative_paths();
     std::cout << "[OK] test_rm\n";
 }
