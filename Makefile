@@ -8,6 +8,8 @@ INCLUDE_DIR = include
 
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
+MAIN_OBJ = $(BUILD_DIR)/main.o
+TEST_SHARED_OBJS = $(filter-out $(MAIN_OBJ), $(OBJS))
 
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.cpp)
 TEST_OBJS = $(TEST_SRCS:$(TEST_DIR)/%.cpp=$(BUILD_DIR)/%.test.o)
@@ -35,7 +37,7 @@ test: $(TEST_BINS)
 $(BUILD_DIR)/%.test.o: $(TEST_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/test_%: $(BUILD_DIR)/%.test.o $(OBJS)
+$(BUILD_DIR)/test_%: $(BUILD_DIR)/%.test.o $(TEST_SHARED_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:

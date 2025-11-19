@@ -3,11 +3,14 @@
 #include "Errors.hpp"
 #include "OIStream.hpp"
 
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include <string>
 #include <string_view>
+
+static constexpr std::size_t kBufferedCliBufSize = 16;
 
 static void printHelp() {
     std::cout << "Commands:\n"
@@ -22,9 +25,12 @@ static void printHelp() {
               << "find <filename>\n"
               << "tree\n"
               << "cat <path>\n"
+            //   << "bcat <path>\n"
               << "nano <path>\n"
               << "echo <text> > <path>\n"
               << "echo <text> >> <path>\n"
+            //   << "becho <text> > <path>\n"
+            //   << "becho <text> >> <path>\n"
               << "read <path>\n"
               << "compress <path>\n"
               << "decompress <path>\n"
@@ -34,7 +40,7 @@ static void printHelp() {
 
 enum class Cmd {
     Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv,
-    Find, Tree, Cat, Nano, Echo, Read, Compress, Decompress,
+    Find, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress,
     Unknown
 };
 
@@ -45,15 +51,17 @@ static Cmd parseCmd(std::string_view s) {
     if (s=="ls")       return Cmd::Ls;
     if (s=="cd")       return Cmd::Cd;
     if (s=="mkdir")    return Cmd::Mkdir;
-    if (s=="create")   return Cmd::Create;
+    if (s=="touch")   return Cmd::Create;
     if (s=="rm")       return Cmd::Rm;
     if (s=="rename")   return Cmd::Rename;
     if (s=="mv")       return Cmd::Mv;
     if (s=="find")     return Cmd::Find;
     if (s=="tree")     return Cmd::Tree;
     if (s=="cat")      return Cmd::Cat;
+    if (s=="bcat")     return Cmd::BCat;
     if (s=="nano")     return Cmd::Nano;
     if (s=="echo")     return Cmd::Echo;
+    if (s=="becho")    return Cmd::BEcho;
     if (s=="read")     return Cmd::Read;
     if (s=="compress") return Cmd::Compress;
     if (s=="decompress") return Cmd::Decompress;
@@ -101,7 +109,7 @@ static void doMkdir(Vfs& v, const std::vector<std::string>& a){
     v.mkdir(a[0]);
 }
 static void doCreate(Vfs& v, const std::vector<std::string>& a){
-    if (a.size() != 1) { printUsage("create","<path>"); return; }
+    if (a.size() != 1) { printUsage("touch","<path>"); return; }
     v.createFile(a[0]);
 }
 static void doRm(Vfs& v, const std::vector<std::string>& a){
@@ -130,6 +138,24 @@ static void doCat(Vfs& v, const std::vector<std::string>& a){
     std::cout << v.readFile(a[0]) << "\n";
 }
 
+static void doBCat(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("bcat", "<path>"); return; }
+    auto node = v.resolve(a[0]);
+    if (!node) throw VfsException(ErrorCode::PathError);
+    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
+
+    OIStream stream(node->content, StreamMode::ReadOnly, kBufferedCliBufSize);
+    stream.Open();
+    std::vector<std::uint8_t> chunk(kBufferedCliBufSize);
+    while (true) {
+        auto read = stream.Read(chunk.data(), chunk.size());
+        if (read == 0) break;
+        for (std::size_t i = 0; i < read; ++i) std::cout << static_cast<char>(chunk[i]);
+    }
+    stream.Close();
+    std::cout << "\n";
+}
+
 static void doNano(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("nano", "<path>"); return; }
     std::cout << "Enter new contents (end with single dot '.'): \n";
@@ -155,6 +181,30 @@ static void doEcho(Vfs& v, const std::vector<std::string>& a){
     }
     bool append = (a[a.size()-2] == ">>");
     v.writeFile(a.back(), content + "\n", append);
+}
+
+static void doBEcho(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() < 3 || (a[a.size()-2] != ">" && a[a.size()-2] != ">>")) {
+        printUsage("becho", "<text> >|>> <path>");
+        return;
+    }
+    std::string content;
+    for (size_t i = 0; i + 2 < a.size(); ++i) {
+        if (i > 0) content += " ";
+        content += a[i];
+    }
+    bool append = (a[a.size()-2] == ">>");
+    auto node = v.resolve(a.back());
+    if (!node) throw VfsException(ErrorCode::PathError);
+    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
+    if (!append) node->content.truncate(0);
+
+    OIStream stream(node->content, StreamMode::WriteOnly, kBufferedCliBufSize);
+    stream.Open();
+    if (append) stream.Seek(node->content.size());
+    stream.WriteString(content);
+    stream.WriteChar('\n');
+    stream.Close();
 }
 
 static void doRead(Vfs& v, const std::vector<std::string>& a){
@@ -202,8 +252,10 @@ void runVfsCLI() {
                 case Cmd::Find:       doFind(vfs, args);       break;
                 case Cmd::Tree:       doTree(vfs, args);       break;
                 case Cmd::Cat:        doCat(vfs, args);        break;
+                case Cmd::BCat:       doBCat(vfs, args);       break;
                 case Cmd::Nano:       doNano(vfs, args);       break;
                 case Cmd::Echo:       doEcho(vfs, args);       break;
+                case Cmd::BEcho:      doBEcho(vfs, args);      break;
                 case Cmd::Read:       doRead(vfs, args);       break;
                 case Cmd::Compress:   doCompress(vfs, args);   break;
                 case Cmd::Decompress: doDecompress(vfs, args); break;
