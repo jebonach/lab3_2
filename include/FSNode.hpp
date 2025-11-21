@@ -5,7 +5,15 @@
 #include <vector>
 #include <map>
 #include <optional>
+#include <ctime>
 #include "FileContent.hpp"
+
+struct FileProperties {
+    std::time_t createdAt{0};
+    std::time_t modifiedAt{0};
+    std::size_t charCount{0};
+    std::size_t byteSize{0};
+};
 
 struct FSNode {
     std::string name;
@@ -14,6 +22,7 @@ struct FSNode {
     std::map<std::string, std::shared_ptr<FSNode>> children;
 
     FileContent content;
+    FileProperties fileProps;
 
     std::shared_ptr<FSNode> getChild(const std::string& name) const;
     void addChild(const std::shared_ptr<FSNode>& child);

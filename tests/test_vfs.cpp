@@ -12,10 +12,10 @@ static void test_compression_roundtrip() {
     Vfs vfs;
     vfs.createFile("a.txt");
     vfs.writeFile("a.txt", "aaaabbbcccddeeeee", false);
-    vfs.compressFile("a.txt");
+    vfs.compress("a.txt");
     std::string compressed = vfs.readFile("a.txt");
     assert(!compressed.empty());
-    vfs.decompressFile("a.txt");
+    vfs.decompress("a.txt");
     std::string result = vfs.readFile("a.txt");
     assert(result == "aaaabbbcccddeeeee");
 }
@@ -23,8 +23,8 @@ static void test_compression_roundtrip() {
 static void test_empty_compression() {
     Vfs vfs;
     vfs.createFile("empty.txt");
-    vfs.compressFile("empty.txt");
-    vfs.decompressFile("empty.txt");
+    vfs.compress("empty.txt");
+    vfs.decompress("empty.txt");
     assert(vfs.readFile("empty.txt") == "");
 }
 
@@ -88,8 +88,8 @@ static void test_compress_long_runs() {
     v.createFile("/huge.bin");
     std::string payload(600, 'Z');
     v.writeFile("/huge.bin", payload, false);
-    v.compressFile("/huge.bin");
-    v.decompressFile("/huge.bin");
+    v.compress("/huge.bin");
+    v.decompress("/huge.bin");
     assert(v.readFile("/huge.bin") == payload);
 }
 
@@ -104,13 +104,71 @@ static void test_resolve_relative_paths() {
     assert(!missing);
 }
 
+static void test_compress_directory_recursive() {
+    Vfs v;
+    v.mkdir("/docs");
+    v.createFile("/docs/a.txt");
+    v.createFile("/docs/b.txt");
+    v.mkdir("/docs/reports");
+    v.createFile("/docs/reports/q1.txt");
+    v.writeFile("/docs/a.txt", "alpha", false);
+    v.writeFile("/docs/b.txt", "beta", false);
+    v.writeFile("/docs/reports/q1.txt", "inner", false);
+
+    v.compress("/docs");
+
+    auto a = v.resolve("/docs/a.txt");
+    assert(a && a->isFile);
+    const auto& bytes = a->content.bytes();
+    assert(bytes.size() >= 13);
+    assert(bytes[0] == 'C' && bytes[1] == 'M' && bytes[2] == 'P');
+
+    v.decompress("/docs");
+    assert(v.readFile("/docs/a.txt") == "alpha");
+    assert(v.readFile("/docs/b.txt") == "beta");
+    assert(v.readFile("/docs/reports/q1.txt") == "inner");
+}
+
+static void test_decompress_skips_plain_files() {
+    Vfs v;
+    v.createFile("/plain.txt");
+    v.writeFile("/plain.txt", "sample", false);
+    v.decompress("/plain.txt");
+    assert(v.readFile("/plain.txt") == "sample");
+}
+
 static void test_compress_decompress_errors() {
     Vfs v;
-    v.mkdir("/dir");
-    expectThrows(ErrorCode::InvalidArg, [&]{ v.compressFile("/dir"); });
-    expectThrows(ErrorCode::InvalidArg, [&]{ v.decompressFile("/dir"); });
-    expectThrows(ErrorCode::PathError, [&]{ v.compressFile("/missing"); });
-    expectThrows(ErrorCode::PathError, [&]{ v.decompressFile("/missing"); });
+    expectThrows(ErrorCode::PathError, [&]{ v.compress("/missing"); });
+    expectThrows(ErrorCode::PathError, [&]{ v.decompress("/missing"); });
+}
+
+static void test_file_properties_tracking() {
+    Vfs v;
+    v.createFile("/stats.txt");
+    auto node = v.resolve("/stats.txt");
+    assert(node && node->isFile);
+    auto created = node->fileProps.createdAt;
+    assert(node->fileProps.byteSize == 0);
+    assert(node->fileProps.charCount == 0);
+
+    v.writeFile("/stats.txt", "hello", false);
+    node = v.resolve("/stats.txt");
+    assert(node->fileProps.charCount == 5);
+    assert(node->fileProps.byteSize == 5);
+    assert(node->fileProps.modifiedAt >= created);
+    auto modified = node->fileProps.modifiedAt;
+
+    v.compress("/stats.txt");
+    node = v.resolve("/stats.txt");
+    assert(node->fileProps.byteSize == node->content.size());
+    assert(node->fileProps.modifiedAt >= modified);
+
+    v.decompress("/stats.txt");
+    node = v.resolve("/stats.txt");
+    assert(node->fileProps.charCount == 5);
+    assert(node->fileProps.byteSize == 5);
+    assert(node->fileProps.createdAt == created);
 }
 
 int main() {
@@ -125,7 +183,10 @@ int main() {
         test_read_errors();
         test_compress_long_runs();
         test_resolve_relative_paths();
+        test_compress_directory_recursive();
+        test_decompress_skips_plain_files();
         test_compress_decompress_errors();
+        test_file_properties_tracking();
         std::cout << "All tests passed!\n";
     } catch (const VfsException& ex) {
         handleException(ex);

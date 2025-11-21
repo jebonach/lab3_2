@@ -36,6 +36,7 @@ void echo(Vfs& vfs, const std::vector<std::string>& args) {
         oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
     file->content.assignText(oss.str());
+    vfs.refreshFileStats(file);
 }
 
 void echoAppend(Vfs& vfs, const std::vector<std::string>& args) {
@@ -48,6 +49,7 @@ void echoAppend(Vfs& vfs, const std::vector<std::string>& args) {
         oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
     file->content.append(std::vector<uint8_t>(oss.str().begin(), oss.str().end()));
+    vfs.refreshFileStats(file);
 }
 
 void nano(Vfs& vfs, const std::vector<std::string>& args) {
@@ -64,6 +66,7 @@ void nano(Vfs& vfs, const std::vector<std::string>& args) {
         oss << line << '\n';
     }
     file->content.assignText(oss.str());
+    vfs.refreshFileStats(file);
 }
 
 void read(Vfs& vfs, const std::vector<std::string>& args) {

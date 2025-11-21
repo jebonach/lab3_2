@@ -39,9 +39,14 @@ bool saveTreeToJsonFile(const std::shared_ptr<FSNode>& root,
                         const std::string& path) {
     std::ofstream f(path);
     if (!f) return false;
+    f << treeToJson(root);
+    return true;
+}
+
+std::string treeToJson(const std::shared_ptr<FSNode>& root) {
     std::ostringstream out;
     toJsonRec(root, out, 0);
-    f << out.str() << "\n";
-    return true;
+    out << "\n";
+    return out.str();
 }
 }

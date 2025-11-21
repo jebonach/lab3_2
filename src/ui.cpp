@@ -9,6 +9,9 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <iomanip>
+#include <ctime>
+#include <algorithm>
 
 static constexpr std::size_t kBufferedCliBufSize = 16;
 
@@ -22,6 +25,7 @@ static void printHelp() {
               << "rm <path>\n"
               << "rename <path> <newname>\n"
               << "mv <src> <dst_dir>\n"
+              << "cp <src> <dst>\n"
               << "find <filename>\n"
               << "tree\n"
               << "cat <path>\n"
@@ -34,13 +38,14 @@ static void printHelp() {
               << "read <path>\n"
               << "compress <path>\n"
               << "decompress <path>\n"
+              << "savejson <path>\n"
               << "help\n"
               << "exit\n";
 }
 
 enum class Cmd {
-    Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv,
-    Find, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress,
+    Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv, Cp,
+    Find, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress, Savejson,
     Unknown
 };
 
@@ -55,6 +60,7 @@ static Cmd parseCmd(std::string_view s) {
     if (s=="rm")       return Cmd::Rm;
     if (s=="rename")   return Cmd::Rename;
     if (s=="mv")       return Cmd::Mv;
+    if (s=="cp")       return Cmd::Cp;
     if (s=="find")     return Cmd::Find;
     if (s=="tree")     return Cmd::Tree;
     if (s=="cat")      return Cmd::Cat;
@@ -65,6 +71,7 @@ static Cmd parseCmd(std::string_view s) {
     if (s=="read")     return Cmd::Read;
     if (s=="compress") return Cmd::Compress;
     if (s=="decompress") return Cmd::Decompress;
+    if (s=="savejson") return Cmd::Savejson;
     return Cmd::Unknown;
 }
 
@@ -91,6 +98,19 @@ static std::string fullPathOfNode(const std::shared_ptr<FSNode>& n) {
     }
     if (path.empty()) path = "/";
     return path;
+}
+
+static std::string formatTimestamp(std::time_t t) {
+    if (t == 0) return "-";
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    if (auto lt = std::localtime(&t)) tm = *lt;
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return oss.str();
 }
 
 // === Стандартные команды ===
@@ -124,11 +144,27 @@ static void doMv(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 2) { printUsage("mv","<src> <dst_dir>"); return; }
     v.mv(a[0], a[1]);
 }
+static void doCp(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 2) { printUsage("cp","<src> <dst>"); return; }
+    v.cp(a[0], a[1]);
+}
 static void doFind(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("find","<filename>"); return; }
-    auto n = v.findFileByName(a[0]);
-    if (!n) std::cout << "not found\n";
-    else    std::cout << "found: " << fullPathOfNode(n) << "\n";
+    auto nodes = v.findFilesByName(a[0]);
+    if (nodes.empty()) {
+        std::cout << "not found\n";
+        return;
+    }
+    std::sort(nodes.begin(), nodes.end(), [](const auto& lhs, const auto& rhs){
+        return fullPathOfNode(lhs) < fullPathOfNode(rhs);
+    });
+    for (const auto& node : nodes) {
+        std::cout << "found: " << fullPathOfNode(node)
+                  << " | created: " << formatTimestamp(node->fileProps.createdAt)
+                  << " | modified: " << formatTimestamp(node->fileProps.modifiedAt)
+                  << " | chars: " << node->fileProps.charCount
+                  << " | bytes: " << node->fileProps.byteSize << "\n";
+    }
 }
 static void doTree(Vfs& v, const std::vector<std::string>&){ v.printTree(); }
 
@@ -205,6 +241,7 @@ static void doBEcho(Vfs& v, const std::vector<std::string>& a){
     stream.WriteString(content);
     stream.WriteChar('\n');
     stream.Close();
+    v.refreshFileStats(node);
 }
 
 static void doRead(Vfs& v, const std::vector<std::string>& a){
@@ -216,12 +253,17 @@ static void doRead(Vfs& v, const std::vector<std::string>& a){
 
 static void doCompress(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("compress", "<path>"); return; }
-    v.compressFile(a[0]);
+    v.compress(a[0]);
 }
 
 static void doDecompress(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("decompress", "<path>"); return; }
-    v.decompressFile(a[0]);
+    v.decompress(a[0]);
+}
+
+static void doSaveJson(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("savejson", "<path>"); return; }
+    v.saveJson(a[0]);
 }
 
 void runVfsCLI() {
@@ -249,6 +291,7 @@ void runVfsCLI() {
                 case Cmd::Rm:         doRm(vfs, args);         break;
                 case Cmd::Rename:     doRename(vfs, args);     break;
                 case Cmd::Mv:         doMv(vfs, args);         break;
+                case Cmd::Cp:         doCp(vfs, args);         break;
                 case Cmd::Find:       doFind(vfs, args);       break;
                 case Cmd::Tree:       doTree(vfs, args);       break;
                 case Cmd::Cat:        doCat(vfs, args);        break;
@@ -259,6 +302,7 @@ void runVfsCLI() {
                 case Cmd::Read:       doRead(vfs, args);       break;
                 case Cmd::Compress:   doCompress(vfs, args);   break;
                 case Cmd::Decompress: doDecompress(vfs, args); break;
+                case Cmd::Savejson:   doSaveJson(vfs, args);   break;
                 case Cmd::Unknown:
                 default: std::cout << "unknown command (type 'help')\n"; break;
             }

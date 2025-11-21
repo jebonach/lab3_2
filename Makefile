@@ -30,7 +30,6 @@ $(TARGET): $(BUILD_DIR) $(OBJS)
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Unit tests
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do echo "Running $$t..."; ./$$t || exit 1; done
 

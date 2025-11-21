@@ -11,8 +11,9 @@ static void test_basic_creation() {
     v.mkdir("/dir");
     v.createFile("/dir/file.txt");
 
-    auto f = v.findFileByName("file.txt");
-    assert(f);
+    auto matches = v.findFilesByName("file.txt");
+    assert(matches.size() == 1);
+    auto f = matches[0];
     assert(f->isFile);
     assert(f->parent.lock()->name == "dir");
     assert(v.resolve("/dir/file.txt") == f);
@@ -67,14 +68,14 @@ static void test_bulk_creation_keeps_index_consistent() {
     v.createFile("/a/b/c/file1.txt");
     v.createFile("/a/b/c/file2.txt");
 
-    auto f1 = v.findFileByName("file1.txt");
-    auto f2 = v.findFileByName("file2.txt");
-    assert(f1 && f2);
+    auto f1 = v.findFilesByName("file1.txt");
+    auto f2 = v.findFilesByName("file2.txt");
+    assert(f1.size() == 1 && f2.size() == 1);
 
     v.rm("/a/b/c/file1.txt");
     auto missingNode = v.resolve("/a/b/c/file1.txt");
     assert(!missingNode);
-    assert(!v.findFileByName("file1.txt"));
+    assert(v.findFilesByName("file1.txt").empty());
 }
 
 int main() {
