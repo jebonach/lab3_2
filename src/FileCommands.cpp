@@ -11,9 +11,12 @@
 namespace FileCommands {
 
 static std::shared_ptr<FSNode> resolveFile(Vfs& vfs, const std::string& path) {
-    auto node = vfs.resolve(path);
-    if (!node) throw VfsException(ErrorCode::NotFound);
-    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
+    auto node = vfs.resolve(path, Vfs::ResolveKind::File);
+    if (!node) {
+        auto alt = vfs.resolve(path, Vfs::ResolveKind::Any);
+        if (alt && !alt->isFile) throw VfsException(ErrorCode::FileExpected);
+        throw VfsException(ErrorCode::NotFound);
+    }
     return node;
 }
 
@@ -36,7 +39,7 @@ void echo(Vfs& vfs, const std::vector<std::string>& args) {
         oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
     file->content.assignText(oss.str());
-    vfs.refreshFileStats(file);
+    vfs.refreshNodeStats(file);
 }
 
 void echoAppend(Vfs& vfs, const std::vector<std::string>& args) {
@@ -49,7 +52,7 @@ void echoAppend(Vfs& vfs, const std::vector<std::string>& args) {
         oss << args[i] << (i + 3 < args.size() ? " " : "");
     auto file = resolveFile(vfs, args.back());
     file->content.append(std::vector<uint8_t>(oss.str().begin(), oss.str().end()));
-    vfs.refreshFileStats(file);
+    vfs.refreshNodeStats(file);
 }
 
 void nano(Vfs& vfs, const std::vector<std::string>& args) {
@@ -66,7 +69,7 @@ void nano(Vfs& vfs, const std::vector<std::string>& args) {
         oss << line << '\n';
     }
     file->content.assignText(oss.str());
-    vfs.refreshFileStats(file);
+    vfs.refreshNodeStats(file);
 }
 
 void read(Vfs& vfs, const std::vector<std::string>& args) {

@@ -11,8 +11,8 @@ static void test_basic_file_rename() {
     v.createFile("/a/f.txt");
     v.renameNode("/a/f.txt", "g.txt");
 
-    auto fOld = v.findFilesByName("f.txt");
-    auto fNew = v.findFilesByName("g.txt");
+    auto fOld = v.findNodesByName("f.txt");
+    auto fNew = v.findNodesByName("g.txt");
     assert(fOld.empty());
     assert(fNew.size() == 1 && fNew[0]->name == "g.txt");
 }
@@ -44,7 +44,7 @@ static void test_move_file_between_directories() {
     v.mkdir("/b");
     v.createFile("/a/file");
     v.mv("/a/file", "/b");
-    auto f = v.findFilesByName("file");
+    auto f = v.findNodesByName("file");
     assert(f.size() == 1 && f[0]->parent.lock()->name == "b");
 }
 
@@ -71,7 +71,7 @@ static void test_move_with_relative_paths() {
     v.createFile("/home/user/log.txt");
     v.cd("/home");
     v.mv("user/log.txt", "/");
-    auto file = v.findFilesByName("log.txt");
+    auto file = v.findNodesByName("log.txt");
     assert(file.size() == 1 && file[0]->parent.lock()->name == "/");
 }
 

@@ -23,8 +23,8 @@ static void test_recursive_directory_removal() {
     v.rm("/a/b");
 
     expectThrows(ErrorCode::PathError, [&]{ v.cd("/a/b"); });
-    assert(v.findFilesByName("c.txt").empty());
-    assert(v.findFilesByName("d.txt").empty());
+    assert(v.findNodesByName("c.txt").empty());
+    assert(v.findNodesByName("d.txt").empty());
 }
 
 static void test_remove_root_is_forbidden() {

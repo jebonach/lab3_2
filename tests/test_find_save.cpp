@@ -11,11 +11,11 @@ static void test_find_file_by_name_basic() {
     v.createFile("/f1.txt");
     v.mkdir("/dir");
 
-    auto files = v.findFilesByName("f1.txt");
+    auto files = v.findNodesByName("f1.txt");
     assert(files.size() == 1 && files[0]->isFile);
 
-    auto dir = v.findFilesByName("dir");
-    assert(dir.empty()); // directories are not indexed
+    auto dir = v.findNodesByName("dir");
+    assert(dir.size() == 1 && !dir[0]->isFile);
 }
 
 static void test_find_updates_after_rename_and_move() {
@@ -24,16 +24,16 @@ static void test_find_updates_after_rename_and_move() {
     v.mkdir("/b");
     v.createFile("/a/file.txt");
 
-    auto file = v.findFilesByName("file.txt");
+    auto file = v.findNodesByName("file.txt");
     assert(file.size() == 1);
 
     v.renameNode("/a/file.txt", "renamed.txt");
-    assert(v.findFilesByName("file.txt").empty());
-    auto renamed = v.findFilesByName("renamed.txt");
+    assert(v.findNodesByName("file.txt").empty());
+    auto renamed = v.findNodesByName("renamed.txt");
     assert(renamed.size() == 1);
 
     v.mv("/a/renamed.txt", "/b");
-    auto moved = v.findFilesByName("renamed.txt");
+    auto moved = v.findNodesByName("renamed.txt");
     assert(moved.size() == 1);
     assert(moved[0]->parent.lock()->name == "b");
 }
@@ -41,9 +41,9 @@ static void test_find_updates_after_rename_and_move() {
 static void test_find_clears_after_rm() {
     Vfs v;
     v.createFile("/temp.log");
-    assert(v.findFilesByName("temp.log").size() == 1);
+    assert(v.findNodesByName("temp.log").size() == 1);
     v.rm("/temp.log");
-    assert(v.findFilesByName("temp.log").empty());
+    assert(v.findNodesByName("temp.log").empty());
 }
 
 static void test_find_returns_all_matches() {
@@ -53,7 +53,7 @@ static void test_find_returns_all_matches() {
     v.createFile("/a/shared.txt");
     v.createFile("/b/shared.txt");
 
-    auto matches = v.findFilesByName("shared.txt");
+    auto matches = v.findNodesByName("shared.txt");
     assert(matches.size() == 2);
     bool hasA = false, hasB = false;
     for (const auto& node : matches) {
@@ -85,7 +85,9 @@ static void test_save_json_failure() {
     Vfs v;
     expectThrows(ErrorCode::PathError, [&]{ v.saveJson("/nope/dir/state.json"); });
     v.mkdir("/dir");
-    expectThrows(ErrorCode::InvalidArg, [&]{ v.saveJson("/dir"); });
+    v.saveJson("/dir");
+    auto dirFile = v.resolve("/dir", Vfs::ResolveKind::File);
+    assert(dirFile && dirFile->isFile);
     v.mkdir("/existing");
     v.createFile("/existing/file.txt");
     expectThrows(ErrorCode::InvalidArg, [&]{ v.saveJson("/existing/file.txt/sub.json"); });

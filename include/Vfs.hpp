@@ -12,6 +12,7 @@ public:
     using NodePtr = std::shared_ptr<FSNode>;
     using WNodePtr = std::weak_ptr<FSNode>;
     using IndexBucket = std::shared_ptr<std::vector<WNodePtr>>;
+    enum class ResolveKind { Any, File, Directory };
 
     Vfs();
 
@@ -30,13 +31,13 @@ public:
 
     void writeToFile(const std::string& path, const std::string& content);
     [[nodiscard("check file content")]] std::string readFile(const std::string& path) const;
-    [[nodiscard("check node")]] NodePtr resolve(const std::string& path) const;  // теперь знает про NodePtr
-    void refreshFileStats(const NodePtr& node);
+    [[nodiscard("check node")]] NodePtr resolve(const std::string& path, ResolveKind preference = ResolveKind::Any) const;
+    void refreshNodeStats(const NodePtr& node);
 
     void ls(const std::string& path = "") const;
     void printTree() const;
 
-    [[nodiscard("check if files found")]] std::vector<NodePtr> findFilesByName(const std::string& name) const;
+    [[nodiscard("check if nodes found")]] std::vector<NodePtr> findNodesByName(const std::string& name) const;
 
     void saveJson(const std::string& jsonPath);
     void loadJson(const std::string& jsonPath);
@@ -44,7 +45,7 @@ public:
 private:
     NodePtr root_;
     NodePtr cwd_;
-    BStarTree<std::string, IndexBucket> fileIndex_;
+    BStarTree<std::string, IndexBucket> nameIndex_;
 
     [[nodiscard("check parent")]] NodePtr resolveParent(const std::string& path, std::string& leafName) const;
 
@@ -52,14 +53,14 @@ private:
     static void printTreeRec(const NodePtr& n, int depth);
     static bool isSubtreeOf(const NodePtr& a, const NodePtr& b);
 
-    std::string makeUniqueName(const NodePtr& parent, const std::string& base) const;
+    std::string makeUniqueName(const NodePtr& parent, const std::string& base, bool isFile) const;
     NodePtr copyNodeRec(const NodePtr& src, const NodePtr& destParent, const std::string& name);
     void compressNode(const NodePtr& node);
     void decompressNode(const NodePtr& node);
-    void initFileProps(const NodePtr& node);
-    void touchFile(const NodePtr& node);
+    void initNodeProps(const NodePtr& node);
+    void touchNode(const NodePtr& node);
 
-    void indexInsertIfFile(const NodePtr& n);
-    void indexEraseIfFile(const NodePtr& n);
+    void indexInsert(const NodePtr& n);
+    void indexErase(const NodePtr& n);
     void indexEraseSubtree(const NodePtr& n);
 };

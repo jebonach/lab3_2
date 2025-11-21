@@ -27,6 +27,7 @@ static void printHelp() {
               << "mv <src> <dst_dir>\n"
               << "cp <src> <dst>\n"
               << "find <filename>\n"
+              << "props <path>\n"
               << "tree\n"
               << "cat <path>\n"
             //   << "bcat <path>\n"
@@ -45,7 +46,7 @@ static void printHelp() {
 
 enum class Cmd {
     Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv, Cp,
-    Find, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress, Savejson,
+    Find, Props, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress, Savejson,
     Unknown
 };
 
@@ -62,6 +63,7 @@ static Cmd parseCmd(std::string_view s) {
     if (s=="mv")       return Cmd::Mv;
     if (s=="cp")       return Cmd::Cp;
     if (s=="find")     return Cmd::Find;
+    if (s=="props")    return Cmd::Props;
     if (s=="tree")     return Cmd::Tree;
     if (s=="cat")      return Cmd::Cat;
     if (s=="bcat")     return Cmd::BCat;
@@ -113,6 +115,15 @@ static std::string formatTimestamp(std::time_t t) {
     return oss.str();
 }
 
+static void printNodeProps(const std::shared_ptr<FSNode>& node) {
+    std::cout << "path: " << fullPathOfNode(node) << "\n"
+              << "type: " << (node->isFile ? "file" : "directory") << "\n"
+              << "created: " << formatTimestamp(node->fileProps.createdAt) << "\n"
+              << "modified: " << formatTimestamp(node->fileProps.modifiedAt) << "\n"
+              << "chars: " << node->fileProps.charCount << "\n"
+              << "bytes: " << node->fileProps.byteSize << "\n";
+}
+
 // === Стандартные команды ===
 static void doHelp(Vfs&, const std::vector<std::string>&) { printHelp(); }
 static void doPwd (Vfs& v, const std::vector<std::string>&){ std::cout << v.pwd() << "\n"; }
@@ -150,7 +161,7 @@ static void doCp(Vfs& v, const std::vector<std::string>& a){
 }
 static void doFind(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("find","<filename>"); return; }
-    auto nodes = v.findFilesByName(a[0]);
+    auto nodes = v.findNodesByName(a[0]);
     if (nodes.empty()) {
         std::cout << "not found\n";
         return;
@@ -160,11 +171,14 @@ static void doFind(Vfs& v, const std::vector<std::string>& a){
     });
     for (const auto& node : nodes) {
         std::cout << "found: " << fullPathOfNode(node)
-                  << " | created: " << formatTimestamp(node->fileProps.createdAt)
-                  << " | modified: " << formatTimestamp(node->fileProps.modifiedAt)
-                  << " | chars: " << node->fileProps.charCount
-                  << " | bytes: " << node->fileProps.byteSize << "\n";
+                  << " (" << (node->isFile ? "file" : "dir") << ")\n";
     }
+}
+static void doProps(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("props","<path>"); return; }
+    auto node = v.resolve(a[0]);
+    if (!node) throw VfsException(ErrorCode::PathError);
+    printNodeProps(node);
 }
 static void doTree(Vfs& v, const std::vector<std::string>&){ v.printTree(); }
 
@@ -176,9 +190,8 @@ static void doCat(Vfs& v, const std::vector<std::string>& a){
 
 static void doBCat(Vfs& v, const std::vector<std::string>& a){
     if (a.size() != 1) { printUsage("bcat", "<path>"); return; }
-    auto node = v.resolve(a[0]);
+    auto node = v.resolve(a[0], Vfs::ResolveKind::File);
     if (!node) throw VfsException(ErrorCode::PathError);
-    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
 
     OIStream stream(node->content, StreamMode::ReadOnly, kBufferedCliBufSize);
     stream.Open();
@@ -230,9 +243,8 @@ static void doBEcho(Vfs& v, const std::vector<std::string>& a){
         content += a[i];
     }
     bool append = (a[a.size()-2] == ">>");
-    auto node = v.resolve(a.back());
+    auto node = v.resolve(a.back(), Vfs::ResolveKind::File);
     if (!node) throw VfsException(ErrorCode::PathError);
-    if (!node->isFile) throw VfsException(ErrorCode::FileExpected);
     if (!append) node->content.truncate(0);
 
     OIStream stream(node->content, StreamMode::WriteOnly, kBufferedCliBufSize);
@@ -241,7 +253,7 @@ static void doBEcho(Vfs& v, const std::vector<std::string>& a){
     stream.WriteString(content);
     stream.WriteChar('\n');
     stream.Close();
-    v.refreshFileStats(node);
+    v.refreshNodeStats(node);
 }
 
 static void doRead(Vfs& v, const std::vector<std::string>& a){
@@ -293,6 +305,7 @@ void runVfsCLI() {
                 case Cmd::Mv:         doMv(vfs, args);         break;
                 case Cmd::Cp:         doCp(vfs, args);         break;
                 case Cmd::Find:       doFind(vfs, args);       break;
+                case Cmd::Props:      doProps(vfs, args);      break;
                 case Cmd::Tree:       doTree(vfs, args);       break;
                 case Cmd::Cat:        doCat(vfs, args);        break;
                 case Cmd::BCat:       doBCat(vfs, args);       break;

@@ -22,10 +22,17 @@ void toJsonRec(const std::shared_ptr<FSNode>& n, std::ostringstream& out, int in
     if (!n->isFile && !n->children.empty()) {
         out << ",\n" << ind << "  \"children\": [\n";
         bool first = true;
-        for (auto it = n->children.begin(); it!=n->children.end(); ++it) {
-            if (!first) out << ",\n";
-            first = false;
-            toJsonRec(it->second, out, indent+4);
+        for (auto& [_, bucket] : n->children) {
+            if (bucket.dir) {
+                if (!first) out << ",\n";
+                first = false;
+                toJsonRec(bucket.dir, out, indent+4);
+            }
+            if (bucket.file) {
+                if (!first) out << ",\n";
+                first = false;
+                toJsonRec(bucket.file, out, indent+4);
+            }
         }
         out << "\n" << ind << "  ]\n" << ind << "}";
     } else {

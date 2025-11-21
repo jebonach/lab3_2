@@ -15,6 +15,10 @@ void expectThrows(ErrorCode expected, Fn&& fn) {
         assert(!"expected VfsException");
     } catch (const VfsException& ex) {
         caught = true;
+        if (ex.code != expected) {
+            std::cerr << "expected error " << static_cast<int>(expected)
+                      << " but got " << static_cast<int>(ex.code) << "\n";
+        }
         assert(ex.code == expected);
     } catch (...) {
         assert(!"unexpected exception type");
