@@ -1,220 +1,330 @@
+#include "ui.hpp"
+#include "Vfs.hpp"
+#include "Errors.hpp"
+#include "OIStream.hpp"
+
+#include <cstdint>
 #include <iostream>
 #include <sstream>
-#include <string>
 #include <vector>
+#include <string>
+#include <string_view>
+#include <iomanip>
+#include <ctime>
 #include <algorithm>
 
-#include "Errors.hpp"
-#include "Vfs.hpp"
-#include "FileCommands.hpp"
-#include "Compression.hpp"
+static constexpr std::size_t kBufferedCliBufSize = 16;
 
-// -----------------------------
-// Утилиты парсинга
-// -----------------------------
-static std::vector<std::string> splitTokens(const std::string& line) {
-    std::vector<std::string> out;
-    std::istringstream iss(line);
-    std::string tok;
-    while (iss >> tok) out.push_back(tok);
-    return out;
-}
-
-static std::string joinFrom(const std::vector<std::string>& v, std::size_t start) {
-    std::string res;
-    for (std::size_t i = start; i < v.size(); ++i) {
-        if (!res.empty()) res.push_back(' ');
-        res += v[i];
-    }
-    return res;
-}
-
-// -----------------------------
-// Справка
-// -----------------------------
 static void printHelp() {
-    std::cout
-        << "Доступные команды:\n"
-        << "  help                                  - показать эту справку\n"
-        << "  pwd                                   - показать текущую директорию\n"
-        << "  ls [path]                             - список содержимого\n"
-        << "  tree                                  - вывести дерево\n"
-        << "  cd <path>                             - перейти в директорию\n"
-        << "  mkdir <path>                          - создать директорию\n"
-        << "  touch <path>                          - создать пустой файл\n"
-        << "  rm <path>                             - удалить файл/директорию (рекурсивно для директорий)\n"
-        << "  mv <src> <dstDir>                     - переместить узел в директорию\n"
-        << "  rename <path> <newName>               - переименовать файл/директорию\n"
-        << "  write <file> <text> [--append]        - записать текст в файл (добавить при --append)\n"
-        << "  cat <file>                            - вывести содержимое файла\n"
-        << "  echo <text...> >  <file>              - перезаписать файл текстом\n"
-        << "  echo <text...> >> <file>              - дописать текст в конец файла\n"
-        << "  nano <file>                           - ввести текст построчно (завершение: строка '.')\n"
-        << "  read <file> [offset] [count]          - прочитать байты как hex\n"
-        << "  savejson <path.json>                  - сохранить VFS в JSON\n"
-        << "  loadjson <path.json>                  - загрузить VFS из JSON\n"
-        << "  compress <path> [--algo all|alpha]    - сжать файл/директорию (LZW var-width)\n"
-        << "  uncompress <file>                     - разжать файл (по заголовку)\n"
-        << "  exit | quit                           - выход\n";
+    std::cout << "Commands:\n"
+              << "pwd\n"
+              << "ls [path]\n"
+              << "cd <path>\n"
+              << "mkdir <path>\n"
+              << "create <path>\n"
+              << "rm <path>\n"
+              << "rename <path> <newname>\n"
+              << "mv <src> <dst_dir>\n"
+              << "cp <src> <dst>\n"
+              << "find <filename>\n"
+              << "props <path>\n"
+              << "tree\n"
+              << "cat <path>\n"
+            //   << "bcat <path>\n"
+              << "nano <path>\n"
+              << "echo <text> > <path>\n"
+              << "echo <text> >> <path>\n"
+            //   << "becho <text> > <path>\n"
+            //   << "becho <text> >> <path>\n"
+              << "read <path>\n"
+              << "compress <path>\n"
+              << "decompress <path>\n"
+            //  << "savejson <path>\n"
+              << "help\n"
+              << "exit\n";
 }
 
-static void printPrompt(const Vfs& vfs) {
-    std::cout << vfs.pwd() << " $ ";
+enum class Cmd {
+    Exit, Help, Pwd, Ls, Cd, Mkdir, Create, Rm, Rename, Mv, Cp,
+    Find, Props, Tree, Cat, BCat, Nano, Echo, BEcho, Read, Compress, Decompress, Savejson,
+    Unknown
+};
+
+static Cmd parseCmd(std::string_view s) {
+    if (s=="exit"||s=="quit") return Cmd::Exit;
+    if (s=="help")     return Cmd::Help;
+    if (s=="pwd")      return Cmd::Pwd;
+    if (s=="ls")       return Cmd::Ls;
+    if (s=="cd")       return Cmd::Cd;
+    if (s=="mkdir")    return Cmd::Mkdir;
+    if (s=="touch")   return Cmd::Create;
+    if (s=="rm")       return Cmd::Rm;
+    if (s=="rename")   return Cmd::Rename;
+    if (s=="mv")       return Cmd::Mv;
+    if (s=="cp")       return Cmd::Cp;
+    if (s=="find")     return Cmd::Find;
+    if (s=="props")    return Cmd::Props;
+    if (s=="tree")     return Cmd::Tree;
+    if (s=="cat")      return Cmd::Cat;
+    if (s=="bcat")     return Cmd::BCat;
+    if (s=="nano")     return Cmd::Nano;
+    if (s=="echo")     return Cmd::Echo;
+    if (s=="becho")    return Cmd::BEcho;
+    if (s=="read")     return Cmd::Read;
+    if (s=="compress") return Cmd::Compress;
+    if (s=="decompress") return Cmd::Decompress;
+    if (s=="savejson") return Cmd::Savejson;
+    return Cmd::Unknown;
 }
 
-static bool parseAlgoArg(const std::vector<std::string>& args, std::size_t startIdx, CompAlgo& outAlgo) {
-    outAlgo = CompAlgo::LZW_VAR_ALL;
-    if (args.size() <= startIdx) return true;
+static std::vector<std::string> readArgs(std::istringstream& iss) {
+    std::vector<std::string> a; std::string t;
+    while (iss >> t) a.push_back(std::move(t));
+    return a;
+}
 
-    const std::string& a0 = args[startIdx];
+static void printUsage(std::string_view cmd, std::string_view u) {
+    std::cout << "usage: " << cmd << " " << u << "\n";
+}
 
-    if (a0.rfind("--algo=", 0) == 0) {
-        std::string v = a0.substr(7);
-        if (v == "all")   { outAlgo = CompAlgo::LZW_VAR_ALL;   return true; }
-        if (v == "alpha") { outAlgo = CompAlgo::LZW_VAR_ALPHA; return true; }
-        return false;
+static std::string fullPathOfNode(const std::shared_ptr<FSNode>& n) {
+    if (!n) return "/";
+    std::vector<std::string> parts;
+    auto cur = n;
+    while (cur) { parts.push_back(cur->name); cur = cur->parent.lock(); }
+    std::string path;
+    for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
+        if (it == parts.rbegin() && *it == "/") { path = "/"; continue; }
+        if (path.size() > 1) path += "/";
+        path += *it;
     }
+    if (path.empty()) path = "/";
+    return path;
+}
 
-    if (a0 == "--algo") {
-        if (args.size() <= startIdx + 1) return false;
-        const std::string& v = args[startIdx + 1];
-        if (v == "all")   { outAlgo = CompAlgo::LZW_VAR_ALL;   return true; }
-        if (v == "alpha") { outAlgo = CompAlgo::LZW_VAR_ALPHA; return true; }
-        return false;
+static std::string formatTimestamp(std::time_t t) {
+    if (t == 0) return "-";
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    if (auto lt = std::localtime(&t)) tm = *lt;
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return oss.str();
+}
+
+static void printNodeProps(const std::shared_ptr<FSNode>& node) {
+    std::cout << "path: " << fullPathOfNode(node) << "\n"
+              << "type: " << (node->isFile ? "file" : "directory") << "\n"
+              << "created: " << formatTimestamp(node->fileProps.createdAt) << "\n"
+              << "modified: " << formatTimestamp(node->fileProps.modifiedAt) << "\n"
+              << "chars: " << node->fileProps.charCount << "\n"
+              << "bytes: " << node->fileProps.byteSize << "\n";
+}
+
+// === Стандартные команды ===
+static void doHelp(Vfs&, const std::vector<std::string>&) { printHelp(); }
+static void doPwd (Vfs& v, const std::vector<std::string>&){ std::cout << v.pwd() << "\n"; }
+static void doLs  (Vfs& v, const std::vector<std::string>& a){
+    if (a.size() > 1) { printUsage("ls","[path]"); return; }
+    v.ls(a.empty()? "" : a[0]);
+}
+static void doCd  (Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("cd","<path>"); return; }
+    v.cd(a[0]);
+}
+static void doMkdir(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("mkdir","<path>"); return; }
+    v.mkdir(a[0]);
+}
+static void doCreate(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("touch","<path>"); return; }
+    v.createFile(a[0]);
+}
+static void doRm(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("rm","<path>"); return; }
+    v.rm(a[0]);
+}
+static void doRename(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 2) { printUsage("rename","<path> <newname>"); return; }
+    v.renameNode(a[0], a[1]);
+}
+static void doMv(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 2) { printUsage("mv","<src> <dst_dir>"); return; }
+    v.mv(a[0], a[1]);
+}
+static void doCp(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 2) { printUsage("cp","<src> <dst>"); return; }
+    v.cp(a[0], a[1]);
+}
+static void doFind(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("find","<filename>"); return; }
+    auto nodes = v.findNodesByName(a[0]);
+    if (nodes.empty()) {
+        std::cout << "not found\n";
+        return;
     }
+    std::sort(nodes.begin(), nodes.end(), [](const auto& lhs, const auto& rhs){
+        return fullPathOfNode(lhs) < fullPathOfNode(rhs);
+    });
+    for (const auto& node : nodes) {
+        std::cout << "found: " << fullPathOfNode(node)
+                  << " (" << (node->isFile ? "file" : "dir") << ")\n";
+    }
+}
+static void doProps(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("props","<path>"); return; }
+    auto node = v.resolve(a[0]);
+    if (!node) throw VfsException(ErrorCode::PathError);
+    printNodeProps(node);
+}
+static void doTree(Vfs& v, const std::vector<std::string>&){ v.printTree(); }
 
-    return true;
+// === Новые команды ===
+static void doCat(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("cat", "<path>"); return; }
+    std::cout << v.readFile(a[0]) << "\n";
+}
+
+static void doBCat(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("bcat", "<path>"); return; }
+    auto node = v.resolve(a[0], Vfs::ResolveKind::File);
+    if (!node) throw VfsException(ErrorCode::PathError);
+
+    OIStream stream(node->content, StreamMode::ReadOnly, kBufferedCliBufSize);
+    stream.Open();
+    std::vector<std::uint8_t> chunk(kBufferedCliBufSize);
+    while (true) {
+        auto read = stream.Read(chunk.data(), chunk.size());
+        if (read == 0) break;
+        for (std::size_t i = 0; i < read; ++i) std::cout << static_cast<char>(chunk[i]);
+    }
+    stream.Close();
+    std::cout << "\n";
+}
+
+static void doNano(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("nano", "<path>"); return; }
+    std::cout << "Enter new contents (end with single dot '.'): \n";
+    std::ostringstream oss;
+    std::string line;
+    while (true) {
+        std::getline(std::cin, line);
+        if (line == ".") break;
+        oss << line << "\n";
+    }
+    v.writeFile(a[0], oss.str(), false);
+}
+
+static void doEcho(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() < 3 || (a[a.size()-2] != ">" && a[a.size()-2] != ">>")) {
+        printUsage("echo", "<text> >|>> <path>");
+        return;
+    }
+    std::string content;
+    for (size_t i = 0; i < a.size()-2; ++i) {
+        if (i > 0) content += " ";
+        content += a[i];
+    }
+    bool append = (a[a.size()-2] == ">>");
+    v.writeFile(a.back(), content + "\n", append);
+}
+
+static void doBEcho(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() < 3 || (a[a.size()-2] != ">" && a[a.size()-2] != ">>")) {
+        printUsage("becho", "<text> >|>> <path>");
+        return;
+    }
+    std::string content;
+    for (size_t i = 0; i + 2 < a.size(); ++i) {
+        if (i > 0) content += " ";
+        content += a[i];
+    }
+    bool append = (a[a.size()-2] == ">>");
+    auto node = v.resolve(a.back(), Vfs::ResolveKind::File);
+    if (!node) throw VfsException(ErrorCode::PathError);
+    if (!append) node->content.truncate(0);
+
+    OIStream stream(node->content, StreamMode::WriteOnly, kBufferedCliBufSize);
+    stream.Open();
+    if (append) stream.Seek(node->content.size());
+    stream.WriteString(content);
+    stream.WriteChar('\n');
+    stream.Close();
+    v.refreshNodeStats(node);
+}
+
+static void doRead(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("read", "<path>"); return; }
+    std::string line;
+    std::istringstream iss(v.readFile(a[0]));
+    while (std::getline(iss, line)) std::cout << line << "\n";
+}
+
+static void doCompress(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("compress", "<path>"); return; }
+    v.compress(a[0]);
+}
+
+static void doDecompress(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("decompress", "<path>"); return; }
+    v.decompress(a[0]);
+}
+
+static void doSaveJson(Vfs& v, const std::vector<std::string>& a){
+    if (a.size() != 1) { printUsage("savejson", "<path>"); return; }
+    v.saveJson(a[0]);
 }
 
 void runVfsCLI() {
     Vfs vfs;
-    printHelp();
 
     std::string line;
     while (true) {
-        printPrompt(vfs);
+        std::cout << vfs.pwd() << " $ ";
         if (!std::getline(std::cin, line)) break;
 
-auto tokens = splitTokens(line);
-        if (tokens.empty()) continue;
+        std::istringstream iss(line);
+        std::string cmdStr; iss >> cmdStr;
+        if (cmdStr.empty()) continue;
 
-        const std::string& cmd = tokens[0];
-        std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-
+        auto args = readArgs(iss);
         try {
-            if (cmd == "help") {
-                printHelp();
+            switch (parseCmd(cmdStr)) {
+                case Cmd::Exit:       return;
+                case Cmd::Help:       doHelp(vfs, args);       break;
+                case Cmd::Pwd:        doPwd(vfs, args);        break;
+                case Cmd::Ls:         doLs(vfs, args);         break;
+                case Cmd::Cd:         doCd(vfs, args);         break;
+                case Cmd::Mkdir:      doMkdir(vfs, args);      break;
+                case Cmd::Create:     doCreate(vfs, args);     break;
+                case Cmd::Rm:         doRm(vfs, args);         break;
+                case Cmd::Rename:     doRename(vfs, args);     break;
+                case Cmd::Mv:         doMv(vfs, args);         break;
+                case Cmd::Cp:         doCp(vfs, args);         break;
+                case Cmd::Find:       doFind(vfs, args);       break;
+                case Cmd::Props:      doProps(vfs, args);      break;
+                case Cmd::Tree:       doTree(vfs, args);       break;
+                case Cmd::Cat:        doCat(vfs, args);        break;
+                case Cmd::BCat:       doBCat(vfs, args);       break;
+                case Cmd::Nano:       doNano(vfs, args);       break;
+                case Cmd::Echo:       doEcho(vfs, args);       break;
+                case Cmd::BEcho:      doBEcho(vfs, args);      break;
+                case Cmd::Read:       doRead(vfs, args);       break;
+                case Cmd::Compress:   doCompress(vfs, args);   break;
+                case Cmd::Decompress: doDecompress(vfs, args); break;
+                case Cmd::Savejson:   doSaveJson(vfs, args);   break;
+                case Cmd::Unknown:
+                default: std::cout << "unknown command (type 'help')\n"; break;
             }
-            else if (cmd == "exit" || cmd == "quit") {
-                break;
-            }
-            else if (cmd == "pwd") {
-                std::cout << vfs.pwd() << "\n";
-            }
-            else if (cmd == "ls") {
-                if (args.size() > 1) { std::cout << "usage: ls [path]\n"; continue; }
-                if (args.empty()) vfs.ls();
-                else              vfs.ls(args[0]);
-            }
-            else if (cmd == "tree") {
-                vfs.printTree();
-            }
-            else if (cmd == "cd") {
-                if (args.size() != 1) { std::cout << "usage: cd <path>\n"; continue; }
-                vfs.cd(args[0]);
-            }
-            else if (cmd == "mkdir") {
-                if (args.size() != 1) { std::cout << "usage: mkdir <path>\n"; continue; }
-                vfs.mkdir(args[0]);
-            }
-            else if (cmd == "touch") {
-                if (args.size() != 1) { std::cout << "usage: touch <path>\n"; continue; }
-                vfs.createFile(args[0]);
-            }
-            else if (cmd == "rm") {
-                if (args.size() != 1) { std::cout << "usage: rm <path>\n"; continue; }
-                vfs.rm(args[0]);
-            }
-            else if (cmd == "mv") {
-                if (args.size() != 2) { std::cout << "usage: mv <src> <dstDir>\n"; continue; }
-                vfs.mv(args[0], args[1]);
-            }
-            else if (cmd == "rename") {
-                if (args.size() != 2) { std::cout << "usage: rename <path> <newName>\n"; continue; }
-                vfs.renameNode(args[0], args[1]);
-            }
-            else if (cmd == "write") {
-
-                if (args.size() < 2) { std::cout << "usage: write <file> <text> [--append]\n"; continue; }
-                const std::string& path = args[0];
-
-                bool append = false;
-                std::vector<std::string> textParts;
-                textParts.reserve(args.size() - 1);
-
-                for (std::size_t i = 1; i < args.size(); ++i) {
-                    if (args[i] == "--append" && i == args.size() - 1) {
-                        append = true;
-                    } else {
-                        textParts.push_back(args[i]);
-                    }
-                }
-
-                std::string text = joinFrom(textParts, 0);
-                vfs.writeFile(path, text, append);
-            }
-            else if (cmd == "cat") {
-                if (args.size() != 1) { std::cout << "usage: cat <file>\n"; continue; }
-                FileCommands::cat(vfs, args);
-            }
-            else if (cmd == "echo") {
-                // echo <text...> > <file> | echo <text...> >> <file>
-                if (args.size() < 3) { std::cout << "usage: echo <text> >|>> <file>\n"; continue; }
-                const std::string& redir = args[args.size() - 2];
-                if (redir == ">") {
-                    FileCommands::echo(vfs, args);
-                } else if (redir == ">>") {
-                    FileCommands::echoAppend(vfs, args);
-                } else {
-                    std::cout << "usage: echo <text> >|>> <file>\n";
-                }
-            }
-            else if (cmd == "nano") {
-                if (args.size() != 1) { std::cout << "usage: nano <file>\n"; continue; }
-                FileCommands::nano(vfs, args);
-            }
-            else if (cmd == "read") {
-                if (args.size() < 1 || args.size() > 3) { std::cout << "usage: read <file> [offset] [count]\n"; continue; }
-
-FileCommands::read(vfs, args);
-            }
-            else if (cmd == "savejson") {
-                if (args.size() != 1) { std::cout << "usage: savejson <path.json>\n"; continue; }
-                vfs.saveJson(args[0]);
-                std::cout << "saved to " << args[0] << "\n";
-            }
-            else if (cmd == "loadjson") {
-                if (args.size() != 1) { std::cout << "usage: loadjson <path.json>\n"; continue; }
-                vfs.loadJson(args[0]);
-                std::cout << "loaded from " << args[0] << "\n";
-            }
-            else if (cmd == "compress") {
-                if (args.size() != 1) { std::cout << "usage: compress <path>\n"; continue; }
-                vfs.compress(args[0]);
-                std::cout << "compressed: " << args[0] << "\n";
-            }
-            else if (cmd == "decompress") {
-                if (args.size() != 1) { std::cout << "usage: uncompress <file>\n"; continue; }
-                vfs.decompress(args[0]);
-                std::cout << "decompressed: " << args[0] << "\n";
-            }
-            else {
-                std::cout << "unknown command: " << cmd << "\n";
-            }
-        } catch (const VfsException& ex) {
+        }
+        catch (const VfsException& ex) {
             handleException(ex);
-        } catch (const std::exception& ex) {
-            std::cerr << "Ошибка: " << ex.what() << "\n";
+        }
+        catch (const std::exception& e) {
+            std::cout << "fatal: " << e.what() << "\n";
         }
     }
 }

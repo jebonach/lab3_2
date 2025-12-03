@@ -365,7 +365,7 @@ Vfs::NodePtr Vfs::copyNodeRec(const NodePtr& src, const NodePtr& destParent, con
 void Vfs::compressNode(const NodePtr& node) {
     if (!node) return;
     if (node->isFile) {
-        compressInplace(node->content, CompAlgo::LZW);
+        compressInplace(node->content, CompAlgo::LZW_VAR_ALL);
         touchNode(node);
         return;
     }
