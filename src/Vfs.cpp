@@ -469,16 +469,17 @@ void Vfs::writeFile(const std::string& path, const std::string& content, bool ap
     touchNode(f);
 }
 
-void Vfs::compress(const std::string& path) {
-    auto node = resolve(path);
-    if (!node) throw VfsException(ErrorCode::PathError);
-    compressNode(node);
+void Vfs::compress(const std::string& path, CompAlgo algo) {
+    auto f = resolve(path);
+    if (!f) throw VfsException(ErrorCode::PathError);
+    if (!f->isFile) throw VfsException(ErrorCode::InvalidArg);
+    compressInplace(f->content, algo);
 }
 
-void Vfs::decompress(const std::string& path) {
+void Vfs::decompress(const std::string& path, CompAlgo algo)) {
     auto node = resolve(path);
     if (!node) throw VfsException(ErrorCode::PathError);
-    decompressNode(node);
+    decompressNode(node, algo);
 }
 
 void Vfs::refreshNodeStats(const NodePtr& node) {

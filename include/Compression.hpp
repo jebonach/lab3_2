@@ -1,8 +1,14 @@
 #pragma once
-#include "FileContent.hpp"
+#include <cstdint>
+#include <vector>
 
-enum class CompAlgo : std::uint8_t { LZW = 2 };
+class FileContent;
+
+enum class CompAlgo : std::uint8_t {
+    LZW_VAR_ALL   = 2,
+    LZW_VAR_ALPHA = 3
+};
 
 bool isCompressed(const FileContent& f);
-void compressInplace(FileContent& f, CompAlgo algo = CompAlgo::LZW);
+void compressInplace(FileContent& f, CompAlgo algo);
 void uncompressInplace(FileContent& f);
