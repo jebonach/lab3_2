@@ -4,6 +4,7 @@
 #include "TestUtils.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -14,23 +15,44 @@
 namespace {
 
 using ByteVec = std::vector<std::uint8_t>;
+constexpr std::array<CompAlgo, 2> kAllAlgorithms{
+    CompAlgo::LZW_VAR_ALL,
+    CompAlgo::LZW_VAR_ALPHA
+};
+
+const char* algoName(CompAlgo algo) {
+    switch (algo) {
+        case CompAlgo::LZW_VAR_ALL: return "LZW_VAR_ALL";
+        case CompAlgo::LZW_VAR_ALPHA: return "LZW_VAR_ALPHA";
+        default: return "UNKNOWN";
+    }
+}
+
+template <typename Fn>
+void forEachAlgo(Fn&& fn) {
+    for (auto algo : kAllAlgorithms) fn(algo);
+}
 
 ByteVec toBytes(const std::string& s) {
     return ByteVec(s.begin(), s.end());
 }
 
-void assertRoundtrip(const ByteVec& data) {
+void assertRoundtripAlgo(const ByteVec& data, CompAlgo algo) {
     FileContent f;
     f.replaceAll(data);
-    compressInplace(f, CompAlgo::LZW);
+    compressInplace(f, algo);
     assert(isCompressed(f));
     try {
         uncompressInplace(f);
     } catch (...) {
-        std::cerr << "roundtrip failed, input bytes=" << data.size() << "\n";
+        std::cerr << "roundtrip failed (" << algoName(algo) << "), input bytes=" << data.size() << "\n";
         throw;
     }
     assert(f.bytes() == data);
+}
+
+void assertRoundtrip(const ByteVec& data) {
+    forEachAlgo([&](CompAlgo algo){ assertRoundtripAlgo(data, algo); });
 }
 
 void assertRoundtrip(const std::string& s) {
@@ -38,11 +60,13 @@ void assertRoundtrip(const std::string& s) {
 }
 
 void test_empty_roundtrip() {
-    FileContent f;
-    compressInplace(f);
-    assert(isCompressed(f));
-    uncompressInplace(f);
-    assert(f.size() == 0);
+    forEachAlgo([](CompAlgo algo){
+        FileContent f;
+        compressInplace(f, algo);
+        assert(isCompressed(f));
+        uncompressInplace(f);
+        assert(f.size() == 0);
+    });
 }
 
 void test_single_symbol() {
@@ -89,30 +113,34 @@ void test_kwkwk_pattern() {
 }
 
 void test_payload_corruption_detection() {
-    FileContent f;
-    f.assignText("payload corruption guard data");
-    compressInplace(f);
-    auto corrupted = f.bytes();
-    assert(corrupted.size() > 13);
-    corrupted[13] ^= 0xFF;
-    FileContent broken;
-    broken.replaceAll(corrupted);
-    expectThrows(ErrorCode::Corrupted, [&]{ uncompressInplace(broken); });
+    forEachAlgo([](CompAlgo algo){
+        FileContent f;
+        f.assignText("payload corruption guard data");
+        compressInplace(f, algo);
+        auto corrupted = f.bytes();
+        assert(corrupted.size() > 13);
+        corrupted[13] ^= 0xFF;
+        FileContent broken;
+        broken.replaceAll(corrupted);
+        expectThrows(ErrorCode::Corrupted, [&]{ uncompressInplace(broken); });
+    });
 }
 
 void test_length_mismatch_detection() {
-    FileContent f;
-    const std::string text = "original length mismatch sample";
-    f.assignText(text);
-    compressInplace(f);
-    auto mutated = f.bytes();
-    assert(mutated.size() >= 13);
-    std::uint64_t wrongLen = static_cast<std::uint64_t>(text.size() + 1);
-    for (int i = 0; i < 8; ++i)
-        mutated[5 + i] = static_cast<std::uint8_t>((wrongLen >> (8 * i)) & 0xFFu);
-    FileContent tampered;
-    tampered.replaceAll(mutated);
-    expectThrows(ErrorCode::Corrupted, [&]{ uncompressInplace(tampered); });
+    forEachAlgo([](CompAlgo algo){
+        FileContent f;
+        const std::string text = "original length mismatch sample";
+        f.assignText(text);
+        compressInplace(f, algo);
+        auto mutated = f.bytes();
+        assert(mutated.size() >= 13);
+        std::uint64_t wrongLen = static_cast<std::uint64_t>(text.size() + 1);
+        for (int i = 0; i < 8; ++i)
+            mutated[5 + i] = static_cast<std::uint8_t>((wrongLen >> (8 * i)) & 0xFFu);
+        FileContent tampered;
+        tampered.replaceAll(mutated);
+        expectThrows(ErrorCode::Corrupted, [&]{ uncompressInplace(tampered); });
+    });
 }
 
 void test_functional_roundtrip_multiple() {

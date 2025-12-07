@@ -476,10 +476,10 @@ void Vfs::compress(const std::string& path, CompAlgo algo) {
     compressInplace(f->content, algo);
 }
 
-void Vfs::decompress(const std::string& path, CompAlgo algo)) {
+void Vfs::decompress(const std::string& path) {
     auto node = resolve(path);
     if (!node) throw VfsException(ErrorCode::PathError);
-    decompressNode(node, algo);
+    decompressNode(node);
 }
 
 void Vfs::refreshNodeStats(const NodePtr& node) {

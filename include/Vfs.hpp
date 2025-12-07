@@ -27,8 +27,8 @@ public:
     void mv(const std::string& src, const std::string& dstDir);
     void cp(const std::string& src, const std::string& dstPath);
     void writeFile(const std::string& path, const std::string& content, bool append);
-    void compress(const std::string& path, CompAlgo algo);
-    void decompress(const std::string& path, CompAlgo algo);
+    void compress(const std::string& path, CompAlgo algo = CompAlgo::LZW_VAR_ALL);
+    void decompress(const std::string& path);
 
     void writeToFile(const std::string& path, const std::string& content);
     [[nodiscard("check file content")]] std::string readFile(const std::string& path) const;

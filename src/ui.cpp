@@ -4,6 +4,7 @@
 #include "OIStream.hpp"
 
 #include <cstdint>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -37,7 +38,7 @@ static void printHelp() {
             //   << "becho <text> > <path>\n"
             //   << "becho <text> >> <path>\n"
               << "read <path>\n"
-              << "compress <path>\n"
+              << "compress <path> [all|alpha]\n"
               << "decompress <path>\n"
             //  << "savejson <path>\n"
               << "help\n"
@@ -85,6 +86,17 @@ static std::vector<std::string> readArgs(std::istringstream& iss) {
 
 static void printUsage(std::string_view cmd, std::string_view u) {
     std::cout << "usage: " << cmd << " " << u << "\n";
+}
+
+static bool parseCompressionAlgo(const std::string& name, CompAlgo& algoOut) {
+    std::string lower;
+    lower.resize(name.size());
+    std::transform(name.begin(), name.end(), lower.begin(), [](unsigned char ch){
+        return static_cast<char>(std::tolower(ch));
+    });
+    if (lower == "all")  { algoOut = CompAlgo::LZW_VAR_ALL; return true; }
+    if (lower == "alpha"){ algoOut = CompAlgo::LZW_VAR_ALPHA; return true; }
+    return false;
 }
 
 static std::string fullPathOfNode(const std::shared_ptr<FSNode>& n) {
@@ -264,8 +276,16 @@ static void doRead(Vfs& v, const std::vector<std::string>& a){
 }
 
 static void doCompress(Vfs& v, const std::vector<std::string>& a){
-    if (a.size() != 1) { printUsage("compress", "<path>"); return; }
-    v.compress(a[0]);
+    if (a.empty() || a.size() > 2) { printUsage("compress", "<path> [all|alpha]"); return; }
+    CompAlgo algo = CompAlgo::LZW_VAR_ALL;
+    if (a.size() == 2) {
+        if (!parseCompressionAlgo(a[1], algo)) {
+            std::cout << "unknown compression algorithm '" << a[1]
+                      << "', expected 'all' or 'alpha'\n";
+            return;
+        }
+    }
+    v.compress(a[0], algo);
 }
 
 static void doDecompress(Vfs& v, const std::vector<std::string>& a){
